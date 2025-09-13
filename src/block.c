@@ -1,0 +1,93 @@
+#include "internal.h"
+#define CTRL_CHR 0xC0FFEE // kahvesiz kod olmaz kral.
+#define ALIGNMENT 8
+
+block_header_t *block_init(void *addr, size_t size) {
+    if (!addr || size < sizeof(block_header_t)) {
+        return NULL;
+    }
+
+    block_header_t *block = (block_header_t *)addr;
+
+    // henuz istenen size yok sadece block headerdan olusuyor
+    block->size = size - sizeof(block_header_t);
+
+    // sadece arena basina verilcek kullaniciyla iliskisi yok ondan istenmedi henuz
+    block->requested_size = 0;
+
+    block->free = 1;
+
+    block->next = NULL;
+    block->prev = NULL;
+
+    block->phys_prev = NULL;
+    block->phys_next = NULL;
+
+    block->magic = CTRL_CHR;
+    block->arena_id = 0;
+
+    return block;
+}
+
+// if the block is larger than the wanted size aligned this f will split the block
+block_header_t *block_split(block_header_t *block, size_t size) {
+    if (!block || block->free == 0) {
+        return NULL;
+    }
+
+    size = (size + ALIGNMENT) & ~ALIGNMENT;
+
+    if (block->size < size + sizeof(block_header_t) + ALIGNMENT) {
+        return NULL;
+    }
+
+    void *new_addr = (char *)block + sizeof(block_header_t) + size;
+    block_header_t *new_block = (block_header_t *)new_addr;
+
+    // new block kullanicinin istedigi block degil ayrimda ayrilan block yani arkada kalan free = 1 olan
+    new_block->size = block->size - size - sizeof(block_header_t);
+    new_block->free = 1;
+    new_block->requested_size = 0; // free ya kullanici henuz istemedi ondan requested size = 0 
+
+    // todo : henuz free liste eklemedik o liste ekleme fonksiyonunda baglicaz unutma 
+    new_block->next = NULL;
+    new_block->prev = NULL;
+
+    new_block->phys_prev = block;
+    new_block->phys_next = block->phys_next;
+
+    new_block->magic = block->magic;     
+    new_block->arena_id = block->arena_id;
+    
+    block->size = size;
+    block->free = 0;
+    
+    block->phys_next = new_block;
+
+    return new_block;
+
+}
+
+/* merge block with its next physical neighbor if free */
+block_header_t *block_coalesce(block_header_t *block);
+
+
+/* insert a block into the free list */
+void block_add_to_free_list(block_header_t *block);
+
+/* remove a block from the free list */
+void block_remove_from_free_list(block_header_t *block);
+
+
+
+/* get pointer to user payload from a block header */
+static inline void *block_to_payload(block_header_t *block);
+
+/* get block header from user payload pointer */
+static inline block_header_t *payload_to_block(void *payload);
+
+/* check if a block is valid (magic number, alignment, etc.) */
+int block_validate(block_header_t *block);
+
+/* print current free list */
+void block_dump_free_list(void);

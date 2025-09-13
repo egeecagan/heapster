@@ -4,13 +4,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/*
-
-probable problem to occur
-if user got 32 byte and then wrote 40 (boom) -> heap corruption
-
-*/
-
 typedef struct block_header {
     size_t size;  // size of the payload (user-allocated memory) not including the header itself
     int free;     // allocation flag: 1 = free (available in free list), 0 = allocated (owned by user)
@@ -28,7 +21,6 @@ typedef struct block_header {
     struct block_header *phys_prev;
     struct block_header *phys_next;
 
-    // maybe in future this could be a macro
     uint32_t magic;  // a constant value for spotting the double frees and non heapster_malloc' ed pointers
 
     /*
