@@ -68,26 +68,83 @@ block_header_t *block_split(block_header_t *block, size_t size) {
 
 }
 
-/* merge block with its next physical neighbor if free */
-block_header_t *block_coalesce(block_header_t *block);
+/* merge block with its next physical neighbor if free ilk bastakine pointer */
+block_header_t *block_coalesce(block_header_t *block) {
+    if (!block || block->free == 0) {
+        return NULL;
+    }
+
+    if (block->next && block->next->free == 1) {
+        block_header_t *new_start = block;
+
+        new_start->free = 1;
+        new_start->size = block->size + block->next->size;
+
+        // requested size artık anlamlı degil zaten free ya
+        new_start->requested_size = 0;
+
+        // fiziksel baglantılar
+        new_start->phys_next = block->next->phys_next;
+        if (new_start->phys_next) {
+            new_start->phys_next->phys_prev = new_start;
+        }
+
+        // free list baglantıları doubly oldugu icin sikintili
+        new_start->next = block->next->next;
+        if (new_start->next) {
+            new_start->next->prev = new_start;
+        }
+
+        new_start->prev = block->prev;
+        if (new_start->prev) {
+            new_start->prev->next = new_start;
+        }
+
+        // diger alanlar
+        new_start->magic = block->magic;
+        new_start->arena_id = block->arena_id;
+
+        return new_start;
+    }
+
+    return block;
+}
 
 
 /* insert a block into the free list */
-void block_add_to_free_list(block_header_t *block);
+void block_add_to_free_list(arena_t *arena, block_header_t *block) {
+    
+}
 
 /* remove a block from the free list */
-void block_remove_from_free_list(block_header_t *block);
+void block_remove_from_free_list(arena_t *arena, block_header_t *block) {
+
+}
 
 
 
 /* get pointer to user payload from a block header */
-static inline void *block_to_payload(block_header_t *block);
+static inline void *block_to_payload(block_header_t *block) {
+    if (!block || block->size == 0) {
+        return NULL;
+    } 
+    return (void *) ((char *)block + sizeof(block_header_t)) ;
+}
 
 /* get block header from user payload pointer */
-static inline block_header_t *payload_to_block(void *payload);
+static inline block_header_t *payload_to_block(void *payload) {
+    if (!payload) {
+        return NULL;
+    }
+    return (block_header_t *)((char *)payload - sizeof(block_header_t));
+}
 
 /* check if a block is valid (magic number, alignment, etc.) */
-int block_validate(block_header_t *block);
+int block_validate(block_header_t *block) {
+
+}
 
 /* print current free list */
-void block_dump_free_list(void);
+void block_dump_free_list(void) {
+
+}

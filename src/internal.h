@@ -31,6 +31,11 @@ typedef struct block_header {
 
 } block_header_t;
 
+typedef struct arena {
+    // inside this i will have my free pointer
+} arena_t;
+
+
 // minimum block size (header only, without payload)
 // even a block is only a header this is the min size of the whole block
 #define BLOCK_MIN_SIZE (sizeof(block_header_t)) 
