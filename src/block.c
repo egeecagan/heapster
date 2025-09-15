@@ -113,15 +113,50 @@ block_header_t *block_coalesce(block_header_t *block) {
 
 /* insert a block into the free list */
 void block_add_to_free_list(arena_t *arena, block_header_t *block) {
-    
+    if (!arena || !block) return;
+
+    block->free = 1;
+    block->requested_size = 0;
+
+    block_header_t *current = arena->free_list_head;
+    block_header_t *prev = NULL;
+
+    while (current && current < block) {
+        prev = current;
+        current = current->next;
+    }
+
+    block->next = current;
+    block->prev = prev;
+
+    if (current) {
+        current->prev = block;
+    }
+
+    if (prev) {
+        prev->next = block;
+    } else {
+        arena->free_list_head = block;
+    }
 }
 
 /* remove a block from the free list */
 void block_remove_from_free_list(arena_t *arena, block_header_t *block) {
+    if (!arena || !block) return;
 
+    if (block->prev) {
+        block->prev->next = block->next;
+    } else {
+        arena->free_list_head = block->next;
+    }
+
+    if (block->next) {
+        block->next->prev = block->prev;
+    }
+
+    block->next = NULL;
+    block->prev = NULL;
 }
-
-
 
 /* get pointer to user payload from a block header */
 static inline void *block_to_payload(block_header_t *block) {
@@ -141,10 +176,26 @@ static inline block_header_t *payload_to_block(void *payload) {
 
 /* check if a block is valid (magic number, alignment, etc.) */
 int block_validate(block_header_t *block) {
+    if (!block) return -1;
 
+    if (block->magic != CTRL_CHR)
+        return -2;
+
+    void *payload = block_to_payload(block);
+
+    if (((uintptr_t)payload % block->alignment) != 0)
+        return -3;
+
+    if (block->size < BLOCK_MIN_SIZE)
+        return -4;
+
+    if (block->free != 0 && block->free != 1)
+        return -5;
+
+    return 1;
 }
 
 /* print current free list */
-void block_dump_free_list(void) {
-
+void block_dump_free_list(arena_t *arena) {
+    // pass
 }

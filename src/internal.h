@@ -11,6 +11,7 @@ typedef struct block_header {
     // if requested size is 30 bytes for ex the allocator will still allocate the min size
     // by this way we can calculate wasted space and log it
     size_t requested_size;
+    size_t alignment;
 
     // doubly linked list pointers for managing free blocks (only valid when free == 1)
     struct block_header *next;  
@@ -33,6 +34,8 @@ typedef struct block_header {
 
 typedef struct arena {
     // inside this i will have my free pointer
+    struct block_header *free_list_head;
+
 } arena_t;
 
 
