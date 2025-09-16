@@ -35,7 +35,6 @@ block_header_t *block_init(void *addr, size_t arena_size) {
     block->size = arena_size - BLOCK_HEADER_SIZE; // sadece payload
     block->requested_size = 0; // arena olusturulurken cagilircak fonksiyon oldugu icin req size 0
     block->free = 1;
-    block->alignment = ALIGNMENT;
 
     block->next = NULL;
     block->prev = NULL;
@@ -135,7 +134,6 @@ block_header_t *block_split(arena_t *arena, block_header_t *block, size_t size) 
     new_block->size = block->size - size - BLOCK_HEADER_SIZE;
     new_block->free = 1;
     new_block->requested_size = 0;
-    new_block->alignment = ALIGNMENT;
 
     new_block->next = NULL;
     new_block->prev = NULL;
