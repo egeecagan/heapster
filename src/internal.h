@@ -63,6 +63,9 @@ typedef struct arena {
 
     // global stati ayarlayabilmek icin tum arenalari gezmek lazim
     struct arena *next;
+
+    // nasil allocate edildigi mmap mi sbrk mi mmap ise 1 sbrk ise 0
+    int is_mmap;
     
 } arena_t;
 
@@ -80,5 +83,6 @@ typedef struct arena {
 
 void *block_to_payload(block_header_t *block);
 block_header_t *payload_to_block(void *payload);
+block_header_t *policy_find_block(arena_t *arena, size_t size);
 
 #endif /* HEAPSTER_INTERNAL_H */
