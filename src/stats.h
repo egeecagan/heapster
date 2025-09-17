@@ -1,0 +1,35 @@
+#ifndef HEAPSTER_STATS_H
+#define HEAPSTER_STATS_H
+
+#include "internal.h"
+
+// global stat struct her arenada gomulu olcak
+typedef struct {
+    size_t total_bytes;        // arena toplam boyutu (header + payload dahil)
+    size_t used_bytes;         // kullaniciya ayrilmis (allocated) payload toplami
+    size_t free_bytes;         // su anda free durumda olan payload toplami
+
+    size_t largest_free_block; // en buyuk free block'un payload boyutu
+    size_t free_block_count;   // free block sayisi
+    size_t allocated_block_count; // su anda kullanilan block sayisi
+
+    size_t wasted_bytes;       // requested_size < block->size oldugunda olusan internal fragmentation
+    double fragmentation_ratio; // (1 - largest_free_block / free_bytes) gibi bir oran
+
+    uint64_t alloc_calls;      // malloc benzeri cagri sayisi
+    uint64_t free_calls;       // free cagri sayisi
+    uint64_t realloc_calls;    // realloc cagri sayisi
+    uint64_t calloc_calls;     // calloc cagri sayisi
+} heapster_stats_t;
+
+// Stats struct’ı sıfırla (örn. program başlangıcında çağırılır)
+void heapster_stats_reset(heapster_stats_t *stats);
+
+
+// Tüm arenaları tarayıp global stats hesapla
+void heapster_stats_update_global(heapster_stats_t *stats);
+
+
+static inline void heapster_stats_print(const arena_t *arena);
+
+#endif /* HEAPSTER_STATS_H */

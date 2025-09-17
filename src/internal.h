@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <pthread.h>
+#include "heapster.h"
 
 
 typedef struct block_header {
@@ -55,6 +56,14 @@ typedef struct arena {
 
     // includes headers and payloads direk arenanin tum size i 
     size_t size; 
+
+    // birden fazla arena olan sistemlerde her arena gomulu kendi statini tutsun diye
+    // neden pointer degil -> ayni yerde bulunur direk arena ile ve 'cache locality' saglar
+    heapster_stats_t stats;
+
+    // global stati ayarlayabilmek icin tum arenalari gezmek lazim
+    struct arena *next;
+    
 } arena_t;
 
 
