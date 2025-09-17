@@ -2,6 +2,9 @@
 #include "heapster.h"
 #include <sys/mman.h>
 
+static arena_t *arena_list_head = NULL;
+pthread_mutex_t arena_list_lock = PTHREAD_MUTEX_INITIALIZER;
+
 static size_t mmap_threshold = 128 * 1024; // 128 kb
 
 void heapster_set_mmap_threshold(size_t bytes) {
@@ -62,44 +65,65 @@ arena_t *arena_init(void *addr, size_t size, int id, int use_mmap) {
 
 arena_t *arena_create(size_t size, int id) {
     void *addr = NULL;
+    arena_t *arena = NULL;
 
     if (size >= mmap_threshold) {
         addr = mmap(NULL, size,
                     PROT_READ | PROT_WRITE,
                     MAP_PRIVATE | MAP_ANONYMOUS,
                     -1, 0);
-        if (addr == MAP_FAILED) {  // aslinda buda bir (void *)-1 bunun sebebi bellekte baya sona yakin bir isaretci olmasi
+        if (addr == MAP_FAILED) {
             return NULL;
         }
-        return arena_init(addr, size, id, 1);
+        arena = arena_init(addr, size, id, 1);
     } else {
         void *cur = sbrk(0);
         if (sbrk(size) == (void *)-1) {
             return NULL;
         }
         addr = cur;
-        return arena_init(addr, size, id, 0);
+        arena = arena_init(addr, size, id, 0);
     }
 
-    
+    if (!arena) return NULL;
+
+    pthread_mutex_lock(&arena_list_lock);
+    arena->next = arena_list_head;  
+    arena_list_head = arena;
+    pthread_mutex_unlock(&arena_list_lock);
+
+    return arena;
 }
+
 
 void arena_destroy(arena_t *arena) {
     if (!arena) return;
+
+    pthread_mutex_lock(&arena_list_lock);
+
+    if (arena_list_head == arena) {
+        arena_list_head = arena->next;
+    } else {
+        arena_t *prev = arena_list_head;
+        while (prev && prev->next != arena) {
+            prev = prev->next;
+        }
+        if (prev) {
+            prev->next = arena->next;
+        }
+    }
+
+    pthread_mutex_unlock(&arena_list_lock);
 
     pthread_mutex_destroy(&arena->lock);
 
     if (arena->is_mmap) {
         munmap(arena, arena->size);
     } else {
-        /*
-            sbrk normalde heap sinirini genisletir ama bu teoride riskli deniyor cunku
-            sadece geri alma islemi o sinir bos ise gerceklesir yoksa kalir. 
-
-            buraya 0 dan bir algoritma olusturmam lazim suan degil
-        */
+        // sbrk shrink logic buraya gelecek
     }
 }
+
 
 block_header_t *arena_find_free_block(arena_t *arena, size_t size) {
     if (!arena || size == 0) {
@@ -143,3 +167,18 @@ void arena_dump(arena_t *arena) {
     printf("====================\n\n");
 }
 
+arena_t *arena_get_list(void) {
+    return arena_list_head; // dikkat: dışarıda lock kullanman gerekebilir
+}
+
+int last_cleanup(void) {
+    arena_t *cur = arena_list_head;
+    while (cur) {
+        arena_t *next = cur->next;
+        arena_destroy(cur);
+        cur = next;
+    }
+
+    arena_list_head = NULL; // tüm arenalar yok edildi
+    return 0;
+}

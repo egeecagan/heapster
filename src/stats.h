@@ -22,14 +22,8 @@ typedef struct {
     uint64_t calloc_calls;     // calloc cagri sayisi
 } heapster_stats_t;
 
-// Stats struct’ı sıfırla (örn. program başlangıcında çağırılır)
 void heapster_stats_reset(heapster_stats_t *stats);
-
-
-// Tüm arenaları tarayıp global stats hesapla
 void heapster_stats_update_global(heapster_stats_t *stats);
-
-
 static inline void heapster_stats_print(const arena_t *arena);
 
 #endif /* HEAPSTER_STATS_H */
