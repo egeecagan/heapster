@@ -1,11 +1,22 @@
 #include "internal.h"
 #include "heapster.h"
 #include <sys/mman.h>
+#include <unistd.h>
 
 static arena_t *arena_list_head = NULL;
 pthread_mutex_t arena_list_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static size_t mmap_threshold = 128 * 1024; // 128 kb
+
+static int arena_id_counter = 1;  
+
+/* 
+tek amacım her arenaya farklı id gitmesi silinen 
+arena için totalden idleri değiştirmek gibi bir 
+amacım yok ondan sadece increment ve bence int (
+4 byte) bunun icin yeterli bir miktar 2^32 farkli 
+deger yapar
+*/
 
 void heapster_set_mmap_threshold(size_t bytes) {
     if (bytes < 4096) {
@@ -19,15 +30,25 @@ size_t heapster_get_mmap_threshold(void) {
     return mmap_threshold;
 }
 
-// size kullanicinin malloc ile isttedigi sey degil mmap ya da sbrk nin bize verdigi miktar
-arena_t *arena_init(void *addr, size_t size, int id, int use_mmap) {
-    if (!addr || size < sizeof(arena_t) + BLOCK_HEADER_SIZE) {
-        return NULL;
+// burda size paremetresi bizim backendde mmap ya da sbrk ye verdigimiz size miktari kullanicinin istedigi degil
+arena_t *arena_init(void *addr, size_t size, int use_mmap) {
+
+    uintptr_t raw      = (uintptr_t)addr + sizeof(arena_t);
+    uintptr_t aligned  = (raw + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
+    // aligned arenanin payload kisminin baslangic adresi gibi dusun
+
+    size_t overhead   = aligned - (uintptr_t)addr;
+
+    if (!addr || size < overhead + BLOCK_HEADER_SIZE) {
+        return NULL;  // bastaki kontrole ekstra aligned sekilde kontrol ekledim 
+        // sizeof(arena_t) aligned a uymayan bir adres olmayabilir ama overhead uyar
     }
+
+    // aklima takilan soru su block header size hem alignmenta uyan bir deger olucak da sizeof(arena_t) bu olmazsa
 
     arena_t *arena = (arena_t *)addr;
 
-    arena->id = id;
+    arena->id = arena_id_counter;
     pthread_mutex_init(&arena->lock, NULL); // bunun sayesinde arena struct i ici lcok u kullanilabilir hale getiririz
 
     arena->start = (char *)addr;
@@ -40,10 +61,6 @@ arena_t *arena_init(void *addr, size_t size, int id, int use_mmap) {
 
     heapster_stats_reset(&arena->stats);
 
-    uintptr_t raw      = (uintptr_t)addr + sizeof(arena_t);
-    uintptr_t aligned  = (raw + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
-    // aligned arenanin payload kisminin baslangic adresi gibi dusun
-
     void *block_addr   = (void *)aligned;
     // ilk blogun baslayacagi adres (headerinin)
 
@@ -55,7 +72,7 @@ arena_t *arena_init(void *addr, size_t size, int id, int use_mmap) {
         return NULL;
     }
 
-    first_block->arena_id = id;
+    first_block->arena_id = arena_id_counter++;
 
     arena->free_list_head   = first_block;
     arena->next_fit_cursor  = first_block;
@@ -63,30 +80,50 @@ arena_t *arena_init(void *addr, size_t size, int id, int use_mmap) {
     return arena;
 }
 
-arena_t *arena_create(size_t size, int id) {
+// parametre olan size kullanicinin istedigi miktar olucak burda
+arena_t *arena_create(size_t size) {
+
+    size_t page_size = sysconf(_SC_PAGE_SIZE);  // bende 4096 * 4 cikiyor mmap bunun kati kadar verir hep
+    size_t alloc_size = (size + page_size - 1) & ~(page_size - 1);
+
     void *addr = NULL;
     arena_t *arena = NULL;
-
-    if (size >= mmap_threshold) {
-        addr = mmap(NULL, size,
+    // kullanici mmap den size ister ama mmap page aligned bir adres ve page size in kati olacak sekilde adres verir
+    // misal kullanici 4070 byte istedi mmap page size 4096 ise 4096 verir ve bunu aligned bir adres olarak verir (%99)
+    if (size >= heapster_get_mmap_threshold()) {
+        addr = mmap(NULL, alloc_size,
                     PROT_READ | PROT_WRITE,
                     MAP_PRIVATE | MAP_ANONYMOUS,
                     -1, 0);
         if (addr == MAP_FAILED) {
             return NULL;
         }
-        arena = arena_init(addr, size, id, 1);
+        arena = arena_init(addr, alloc_size, 1);
     } else {
+    // kaba minimum (overhead burada hesaplanamaz, çünkü addr daha alınmadı)
+        size_t min_size = sizeof(arena_t) + BLOCK_HEADER_SIZE + ALIGNMENT;
+        if (size < min_size) {
+            size = min_size;
+        }
+
         void *cur = sbrk(0);
         if (sbrk(size) == (void *)-1) {
             return NULL;
         }
         addr = cur;
-        arena = arena_init(addr, size, id, 0);
+
+        // asıl kesin kontrol ve overhead hesaplama arena_init içinde yapılacak
+        arena = arena_init(addr, size, 0);
     }
 
-    if (!arena) return NULL;
 
+
+    if (!arena) {
+        return NULL;
+    } 
+
+    arena->requested_size = size; // runtime icin anlami yok ama debug da ise yarar
+    
     pthread_mutex_lock(&arena_list_lock);
     arena->next = arena_list_head;  
     arena_list_head = arena;
@@ -168,7 +205,7 @@ void arena_dump(arena_t *arena) {
 }
 
 arena_t *arena_get_list(void) {
-    return arena_list_head; // dikkat: dışarıda lock kullanman gerekebilir
+    return arena_list_head; // dikkat: disarida lock kullanman gerekebilir
 }
 
 int last_cleanup(void) {

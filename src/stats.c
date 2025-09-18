@@ -4,11 +4,11 @@
 // the struct is inside the heapster.h file but the thing is how do i supposed to use it
 
 // Stats struct'i sifirla (orn. program başlangicinda çağirilir)
-void heapster_stats_reset(heapster_stats_t *stats) {
-    if (!stats) {
+void arena_stats_reset(arena_t *arena) {
+    if (!arena) {
         return;
     }
-    memset(&stats, 0, sizeof(stats));
+    memset(&arena->stats, 0, sizeof(arena->stats));
 }
 
 
@@ -19,7 +19,7 @@ void heapster_stats_update_global(heapster_stats_t *global_stats) {
 }
 
 // kullaniciya ozet yazdir
-static inline void heapster_stats_print(const arena_t *arena) {  // kullanici degistiremesin iceride parametreyi ondan const
+static inline void arena_stats_print(const arena_t *arena) {  // kullanici degistiremesin iceride parametreyi ondan const
     if (!arena) {
         printf("[heapster] (no arena)\n");
         return;

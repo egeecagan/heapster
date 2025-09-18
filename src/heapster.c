@@ -23,11 +23,14 @@ heapster_policy_t heapster_get_policy(void) {
 }
 
 int heapster_init(size_t arena_size, heapster_policy_t policy) {
+
+    size_t min_size = sizeof(arena_t) + BLOCK_HEADER_SIZE + ALIGNMENT;
+    
     if (arena_size > 0) {
         default_arena_size = arena_size;
     }
     heapster_set_policy(policy);
-    arena_t *arena = arena_create(default_arena_size, 0);
+    arena_t *arena = arena_create(default_arena_size);
     return arena ? 0 : -1;
 }
 

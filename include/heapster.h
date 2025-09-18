@@ -8,7 +8,8 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
-#include "internal.h"
+
+#include "internal.h"  // internal struct definitions and macros except functions
 #include "stats.h"
 
 #ifdef __cplusplus
@@ -38,16 +39,16 @@ void heapster_set_mmap_threshold(size_t bytes);
 size_t heapster_get_mmap_threshold(void);
 
 /* heap information */
+void heapster_arena_stats(arena_t *arena);
 void heapster_get_stats(heapster_stats_t *out_stats);
 
 /* verifies heap integrity by checking free lists and detecting possible double free errors */
 int heapster_validate_heap(void);
 
-/* debug logging */
-void heapster_enable_logging(int enabled);
+
 
 /* managing the area */
-arena_t *arena_create(size_t size, int id);
+arena_t *arena_create(size_t size);
 void arena_destroy(arena_t *arena);
 
 /* hook mechanism (for profiling) 

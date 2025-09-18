@@ -3,6 +3,7 @@
 #include <stdint.h> // uintptr_t icin gerekli 
 
 #include "internal.h"
+#include "internal_f.h"
 #include "heapster.h"
 
 /*
@@ -16,6 +17,8 @@ first fit   -> ilk sigan block'a yerlesir
 next fit    -> en son bakilan block’tan devam eder, gerekirse basa sarar
 best fit    -> uygun olan en küçük block’u seçer
 worst fit   -> uygun olan en büyük block’u seçer
+
+yoksa null döner ona göre farklı arena denenir ya da yeni arena açılır
 */
 
 // hizali mi kontrolü (her payload ALIGNMENT’e gore)

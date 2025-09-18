@@ -1,6 +1,7 @@
 #include "internal.h"
-#include <stdio.h>   // printf
-#include <stdbool.h> // bool, true/false
+#include "internal_f.h"
+#include <stdio.h>  
+#include <stdbool.h>
 
 
 static inline bool block_is_in_free_list(arena_t *arena, block_header_t *b) {

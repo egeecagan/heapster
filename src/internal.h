@@ -7,11 +7,9 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <pthread.h>
-#include "heapster.h"
-
 
 typedef struct block_header {
-    size_t size;  // size of the payload (user-allocated memory) not including the header itself
+    size_t size;  // size of the payload (user-allocated memory) not including the block header itself
     int free;     // allocation flag: 1 = free (available in free list), 0 = allocated (owned by user)
 
     // if requested size is 30 bytes for ex the allocator will still allocate the min size
@@ -57,6 +55,8 @@ typedef struct arena {
     // includes headers and payloads direk arenanin tum size i 
     size_t size; 
 
+    size_t requested_size;
+
     // birden fazla arena olan sistemlerde her arena gomulu kendi statini tutsun diye
     // neden pointer degil -> ayni yerde bulunur direk arena ile ve 'cache locality' saglar
     heapster_stats_t stats;
@@ -69,20 +69,13 @@ typedef struct arena {
     
 } arena_t;
 
-
 // minimum block size (header only, without payload)
 // even a block is only a header this is the min size of the whole block
-
 
 // bu macro align edilebilir deger cikartir her halukarda bu da align etme formulu k&r a gore
 #define BLOCK_HEADER_SIZE \
     ((sizeof(block_header_t) + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1))
 
-
 #define BLOCK_MIN_SIZE (BLOCK_HEADER_SIZE)
-
-void *block_to_payload(block_header_t *block);
-block_header_t *payload_to_block(void *payload);
-block_header_t *policy_find_block(arena_t *arena, size_t size);
 
 #endif /* HEAPSTER_INTERNAL_H */

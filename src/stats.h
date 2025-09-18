@@ -3,11 +3,13 @@
 
 #include "internal.h"
 
-// global stat struct her arenada gomulu olcak
+// global stat struct her arenada gomulu olcak 
 typedef struct {
     size_t total_bytes;        // arena toplam boyutu (header + payload dahil)
     size_t used_bytes;         // kullaniciya ayrilmis (allocated) payload toplami
     size_t free_bytes;         // su anda free durumda olan payload toplami
+
+    // arena 1000 birim 100 birim header mesela 400 ü user malloc ile aldı 500 de free
 
     size_t largest_free_block; // en buyuk free block'un payload boyutu
     size_t free_block_count;   // free block sayisi
@@ -22,8 +24,6 @@ typedef struct {
     uint64_t calloc_calls;     // calloc cagri sayisi
 } heapster_stats_t;
 
-void heapster_stats_reset(heapster_stats_t *stats);
-void heapster_stats_update_global(heapster_stats_t *stats);
-static inline void heapster_stats_print(const arena_t *arena);
+
 
 #endif /* HEAPSTER_STATS_H */
