@@ -1,0 +1,2 @@
+/usr/bin/ar qc libheapster.a CMakeFiles/heapster.dir/src/arena.c.o CMakeFiles/heapster.dir/src/block.c.o CMakeFiles/heapster.dir/src/heapster.c.o CMakeFiles/heapster.dir/src/policy.c.o CMakeFiles/heapster.dir/src/stats.c.o
+/usr/bin/ranlib libheapster.a

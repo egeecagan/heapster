@@ -13,14 +13,6 @@ add_library(heapster STATIC
 )
 
 target_include_directories(heapster
-    PUBLIC
-        ${PROJECT_SOURCE_DIR}/include
-    PRIVATE
-        ${PROJECT_SOURCE_DIR}/src
+    PUBLIC ${PROJECT_SOURCE_DIR}/include
+    PRIVATE ${PROJECT_SOURCE_DIR}/src
 )
-
-add_executable(heapster_tests
-    tests/test_main.c
-)
-
-target_link_libraries(heapster_tests PRIVATE heapster)

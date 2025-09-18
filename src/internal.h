@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <pthread.h>
+#include "stats.h"
 
 typedef struct block_header {
     size_t size;  // size of the payload (user-allocated memory) not including the block header itself
@@ -77,5 +78,10 @@ typedef struct arena {
     ((sizeof(block_header_t) + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1))
 
 #define BLOCK_MIN_SIZE (BLOCK_HEADER_SIZE)
+
+#define ARENA_HEADER_SIZE \
+    ((sizeof(arena_t) + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1))
+
+#define ARENA_MIN_SIZE (ARENA_HEADER_SIZE)
 
 #endif /* HEAPSTER_INTERNAL_H */

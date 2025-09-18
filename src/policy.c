@@ -19,6 +19,12 @@ best fit    -> uygun olan en küçük block’u seçer
 worst fit   -> uygun olan en büyük block’u seçer
 
 yoksa null döner ona göre farklı arena denenir ya da yeni arena açılır
+
+fonksiyonlarin aldigi size paremetresi sadece payload size i header dahil degil
+
+normal durumda her zaman blockun block is aligned fonksiyonundan gecmesi lazim cunku
+diger kisimlar da alignment hep korunuyor ama split ya da coalescing esnasinda bozulabilir
+yani galiba
 */
 
 // hizali mi kontrolü (her payload ALIGNMENT’e gore)

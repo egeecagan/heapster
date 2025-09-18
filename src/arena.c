@@ -1,12 +1,14 @@
-#include "internal.h"
-#include "heapster.h"
 #include <sys/mman.h>
 #include <unistd.h>
 
-static arena_t *arena_list_head = NULL;
+#include "internal.h"
+#include "heapster.h"
+#include "internal_f.h"
+
+static arena_t *arena_list_head = NULL; // program ici olan tum arenalarin bastan sona linked list hali getter/setter ile ulasilir
 pthread_mutex_t arena_list_lock = PTHREAD_MUTEX_INITIALIZER;
 
-static size_t mmap_threshold = 128 * 1024; // 128 kb
+static size_t mmap_threshold = 128 * 1024; // arena create bu sizedan az ise sbrk fazla ya da esit ise mmap
 
 static int arena_id_counter = 1;  
 
@@ -30,14 +32,14 @@ size_t heapster_get_mmap_threshold(void) {
     return mmap_threshold;
 }
 
-// burda size paremetresi bizim backendde mmap ya da sbrk ye verdigimiz size miktari kullanicinin istedigi degil
+// burda size paremetresi bizim backendde mmap ya da sbrk sonucu aldigimiz size miktari kullanicinin istedigi degil (alloc_size)
 arena_t *arena_init(void *addr, size_t size, int use_mmap) {
-
-    uintptr_t raw      = (uintptr_t)addr + sizeof(arena_t);
+// bu size a arena header block header her sey dahil
+    uintptr_t raw      = (uintptr_t)addr + ARENA_HEADER_SIZE; // mmap dondugu adres + arena header
     uintptr_t aligned  = (raw + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
-    // aligned arenanin payload kisminin baslangic adresi gibi dusun
+    // aligned = arenanin payload kisminin baslangic adresi gibi dusun
 
-    size_t overhead   = aligned - (uintptr_t)addr;
+    size_t overhead   = aligned - (uintptr_t)addr; // bu farki alignment yaptigimiz icin kaybederiz
 
     if (!addr || size < overhead + BLOCK_HEADER_SIZE) {
         return NULL;  // bastaki kontrole ekstra aligned sekilde kontrol ekledim 
@@ -59,7 +61,13 @@ arena_t *arena_init(void *addr, size_t size, int use_mmap) {
     arena->next_fit_cursor = NULL;
     arena->is_mmap = use_mmap;
 
-    heapster_stats_reset(&arena->stats);
+    // c de adresi cast ettikten sonra fieldlari koymaya basladigimiz an adrese sirasiyla konur rastgele gitmez daha guzel aciklanabilir ama benden bu kadar
+
+    arena_stats_reset(arena);
+
+    // bizde memory layout soyle
+    // |arena header| overhead (alignment kaybi) | block header | block payload ... |
+    // |<--------- size --------->|
 
     void *block_addr   = (void *)aligned;
     // ilk blogun baslayacagi adres (headerinin)
@@ -76,15 +84,15 @@ arena_t *arena_init(void *addr, size_t size, int use_mmap) {
 
     arena->free_list_head   = first_block;
     arena->next_fit_cursor  = first_block;
-
+    
     return arena;
 }
 
 // parametre olan size kullanicinin istedigi miktar olucak burda
 arena_t *arena_create(size_t size) {
 
-    size_t page_size = sysconf(_SC_PAGE_SIZE);  // bende 4096 * 4 cikiyor mmap bunun kati kadar verir hep
-    size_t alloc_size = (size + page_size - 1) & ~(page_size - 1);
+    size_t page_size = sysconf(_SC_PAGE_SIZE);  // bende 4096 * 4 cikiyor mmap bunun kati kadar verir hep ve adres page aligned olur galiba
+    size_t alloc_size = (size + page_size - 1) & ~(page_size - 1); // kernelden alinan miktar gercek
 
     void *addr = NULL;
     arena_t *arena = NULL;
@@ -95,13 +103,15 @@ arena_t *arena_create(size_t size) {
                     PROT_READ | PROT_WRITE,
                     MAP_PRIVATE | MAP_ANONYMOUS,
                     -1, 0);
+
+        // adresin basindan ilk olarak arena header gelcek sonra block heaeder gelcek sonra block payload ...
         if (addr == MAP_FAILED) {
             return NULL;
         }
         arena = arena_init(addr, alloc_size, 1);
     } else {
     // kaba minimum (overhead burada hesaplanamaz, çünkü addr daha alınmadı)
-        size_t min_size = sizeof(arena_t) + BLOCK_HEADER_SIZE + ALIGNMENT;
+        size_t min_size = ARENA_HEADER_SIZE + BLOCK_HEADER_SIZE + ALIGNMENT;
         if (size < min_size) {
             size = min_size;
         }
@@ -112,7 +122,6 @@ arena_t *arena_create(size_t size) {
         }
         addr = cur;
 
-        // asıl kesin kontrol ve overhead hesaplama arena_init içinde yapılacak
         arena = arena_init(addr, size, 0);
     }
 
@@ -161,7 +170,7 @@ void arena_destroy(arena_t *arena) {
     }
 }
 
-
+// payload size i parametre burda
 block_header_t *arena_find_free_block(arena_t *arena, size_t size) {
     if (!arena || size == 0) {
         return NULL;

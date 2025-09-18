@@ -1,5 +1,6 @@
 #include "internal.h"
 #include "internal_f.h"
+#include "heapster.h"
 #include <stdio.h>  
 #include <stdbool.h>
 
@@ -115,15 +116,15 @@ block_header_t *block_split(arena_t *arena, block_header_t *block, size_t size) 
     if (!arena || !block || block->free == 0) {
         return NULL;
     }
+    
+    size = (size + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
 
-    size_t al = ALIGNMENT;
-    size = (size + (al - 1)) & ~(al - 1);
-
+    // block->size zaten payload size ayrimdan sonra 2. kisimda block olusturmasi icin en az bir adet daha header boyutu icermesi lazim
     if (block->size < size + BLOCK_HEADER_SIZE + ALIGNMENT) {
         return NULL;
     }
 
-    // block free listteyse cikar (allocate edilecek)
+    // block free listteyse c ikar (allocate edilecek)
     if (block->free == 1 && block_is_in_free_list(arena, block)) {
         block_remove_from_free_list(arena, block);
     }
@@ -132,7 +133,7 @@ block_header_t *block_split(arena_t *arena, block_header_t *block, size_t size) 
     block_header_t *new_block = (block_header_t *)new_addr;
 
     // trailing free parca
-    new_block->size = block->size - size - BLOCK_HEADER_SIZE;
+    new_block->size = block->size - (size + BLOCK_HEADER_SIZE);
     new_block->free = 1;
     new_block->requested_size = 0;
 
