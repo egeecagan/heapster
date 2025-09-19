@@ -19,4 +19,10 @@ void block_dump_free_list(arena_t *arena);
 
 arena_t *arena_create(size_t size);
 
+arena_t *arena_get_list(void);
+int last_cleanup(void);
+block_header_t *arena_find_free_block(arena_t *arena, size_t size);
+block_header_t *block_split(arena_t *arena, block_header_t *block, size_t size);
+void *block_to_payload(block_header_t *block);
+
 #endif

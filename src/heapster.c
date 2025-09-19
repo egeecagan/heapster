@@ -109,6 +109,22 @@ void *heapster_malloc(size_t size) {
         return block_to_payload(block);
         // ama block size i block->size kadar ve artik split yapamazsin
     }
+}
 
+// n member and each member has the size of size
+void *heapster_calloc(size_t nmemb, size_t size) {
 
+    size_t total = nmemb * size;
+    if (size != 0 && total / size != nmemb) {
+        // carpim islemi overflow yapti
+        return NULL;
+    }
+
+    void *ptr = heapster_malloc(total); 
+    if (!ptr) {
+        return NULL;
+    }
+
+    memset(ptr, 0, total); 
+    return ptr;
 }

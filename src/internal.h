@@ -87,10 +87,10 @@ typedef struct arena {
 
 #define ARENA_MIN_SIZE (ARENA_HEADER_SIZE)
 
-arena_t *arena_get_list(void);
-int last_cleanup(void);
-block_header_t *arena_find_free_block(arena_t *arena, size_t size);
-block_header_t *block_split(arena_t *arena, block_header_t *block, size_t size);
-void *block_to_payload(block_header_t *block);
+#define BLOCK_MISSED_SIZE \
+    (BLOCK_HEADER_SIZE - (sizeof(block_header_t)))
+
+#define ARENA_MISSED_SIZE \
+    (ARENA_HEADER_SIZE - (sizeof(arena_t)))
 
 #endif /* HEAPSTER_INTERNAL_H */

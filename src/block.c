@@ -21,17 +21,13 @@ static inline bool block_is_in_free_list(arena_t *arena, block_header_t *b) {
 
 // CRUICAL : cagirildiktan sonra ilk yapacagin sey arena id yi ayarlamak olucak.
 // ayrica bu parametre olan addr aligned degilse direk tum program kayar o kontrolu unutma
+// header icin alignment sart degil ama payload align olmak zorunda
 block_header_t *block_init(void *addr, size_t block_header_plus_paylaod) {
-    if (!addr || block_header_plus_paylaod < BLOCK_HEADER_SIZE) {
+    if (!addr || block_header_plus_paylaod <= BLOCK_HEADER_SIZE) {
         return NULL;
     }
 
-    // bu fonk zaten arena olusturulurken cagirilcak ya sadece ondan
-
-    block_header_t *block = (block_header_t *)addr; // addr arenanin baslangici
-
-    // parametre olan size da mmap in bize verdigi miktar aslinda istenen degil
-    // yani 4097 istedi ya mesela kullanici 4096 * 2 verir
+    block_header_t *block = (block_header_t *)addr; 
 
     // baslangicta tek bir büyük free block
     block->size = block_header_plus_paylaod - BLOCK_HEADER_SIZE; // sadece payload
