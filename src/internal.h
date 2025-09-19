@@ -7,7 +7,10 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <pthread.h>
+#include "stdio.h"
 #include "stats.h"
+
+extern pthread_mutex_t arena_list_lock;
 
 typedef struct block_header {
     size_t size;  // size of the payload (user-allocated memory) not including the block header itself
@@ -38,7 +41,7 @@ typedef struct block_header {
 
 typedef struct arena {
     // arena id si
-    int id;
+    uint64_t id;
 
     // for thread safe alocation from pthread.h kullanip kullanmayacagim supheli
     pthread_mutex_t lock;       
@@ -83,5 +86,11 @@ typedef struct arena {
     ((sizeof(arena_t) + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1))
 
 #define ARENA_MIN_SIZE (ARENA_HEADER_SIZE)
+
+arena_t *arena_get_list(void);
+int last_cleanup(void);
+block_header_t *arena_find_free_block(arena_t *arena, size_t size);
+block_header_t *block_split(arena_t *arena, block_header_t *block, size_t size);
+void *block_to_payload(block_header_t *block);
 
 #endif /* HEAPSTER_INTERNAL_H */

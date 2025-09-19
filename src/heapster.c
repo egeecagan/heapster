@@ -1,5 +1,7 @@
 
 #include "heapster.h"
+#include "internal.h"
+#include "internal_f.h"
 
 /*
 main function definitions of public api

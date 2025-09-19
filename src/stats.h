@@ -3,9 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <pthread.h>
 
-// stats struct'i her arenada gomulu olcak 
 typedef struct {
     size_t total_bytes;        // arena toplam boyutu (header + payload dahil)
     size_t used_bytes;         // kullaniciya ayrilmis (allocated) payload toplami
@@ -24,4 +22,4 @@ typedef struct {
     uint64_t calloc_calls;     // calloc cagri sayisi
 } heapster_stats_t;
 
-#endif /* HEAPSTER_STATS_H */
+#endif 

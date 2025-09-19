@@ -1,20 +1,30 @@
 #include <sys/mman.h>
 #include <unistd.h>
+#include <string.h>
 
 #include "internal.h"
 #include "heapster.h"
 #include "internal_f.h"
 
-static arena_t *arena_list_head = NULL; // program ici olan tum arenalarin bastan sona linked list hali getter/setter ile ulasilir
+static arena_t *arena_list_head = NULL; 
+/*
+program icinde olusturulan tum arenalar getter methodu ile (arena_get_list())
+ulasilir linked list yapisidir return_value->next ile devam edilir
+*/
+
 pthread_mutex_t arena_list_lock = PTHREAD_MUTEX_INITIALIZER;
 
-static size_t mmap_threshold = 128 * 1024; // arena create bu sizedan az ise sbrk fazla ya da esit ise mmap
+static size_t mmap_threshold = 128 * 1024; 
+/*
+arena create'nin parametresi size bu sizedan 
+az ise sbrk fazla ya da esit ise mmap kullanilir
+getter ve setter methodlar ile disaridan erisilebilir
+*/
 
-static int arena_id_counter = 1;  
-
+static uint64_t arena_id_counter = 1;  
 /* 
-tek amacım her arenaya farklı id gitmesi silinen 
-arena için totalden idleri değiştirmek gibi bir 
+tek amacım her arenaya farklı id gitmesidir silinen 
+arena icin totalden idleri degistirmek gibi bir 
 amacım yok ondan sadece increment ve bence int (
 4 byte) bunun icin yeterli bir miktar 2^32 farkli 
 deger yapar
@@ -32,26 +42,35 @@ size_t heapster_get_mmap_threshold(void) {
     return mmap_threshold;
 }
 
-// burda size paremetresi bizim backendde mmap ya da sbrk sonucu aldigimiz size miktari kullanicinin istedigi degil (alloc_size)
+/* 
+bu fonksiyon arena icin gerekli adres baslangicini alir ve arena_header
+block_header i olusturup bu adresin basina sirasiyla koyar. c de struct
+fieldlari pointerda adrese sirasiyla konur yani arena pointerina cevir-
+dikten sonra p->field dedigin an direk adresin basina koyar ve oyle devam
+eder. parametre olan size burada bizim mmap ya da sbrk ile elde ettigimizi
+dusundugumuz alan miktari yani mmap ya da sbrk ye gecirdigimiz deger ve bu
+size a arena header block header block payload baska block header ... her sey
+dahil
+*/
 arena_t *arena_init(void *addr, size_t size, int use_mmap) {
-// bu size a arena header block header her sey dahil
-    uintptr_t raw      = (uintptr_t)addr + ARENA_HEADER_SIZE; // mmap dondugu adres + arena header
+    uintptr_t raw      = (uintptr_t)addr + ARENA_HEADER_SIZE; 
     uintptr_t aligned  = (raw + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
-    // aligned = arenanin payload kisminin baslangic adresi gibi dusun
 
-    size_t overhead   = aligned - (uintptr_t)addr; // bu farki alignment yaptigimiz icin kaybederiz
+    size_t overhead   = aligned - (uintptr_t)addr;
 
-    if (!addr || size < overhead + BLOCK_HEADER_SIZE) {
-        return NULL;  // bastaki kontrole ekstra aligned sekilde kontrol ekledim 
-        // sizeof(arena_t) aligned a uymayan bir adres olmayabilir ama overhead uyar
+    // bizde memory layout soyle
+    // |arena header| overhead (alignment kaybi) | block header | block payload ... |
+    // |<---------------------------------- size ---------------------------------->|
+    // |arena start|                                                      |arena_end|
+
+    if (!addr || size < overhead + BLOCK_HEADER_SIZE + ARENA_HEADER_SIZE) {
+        return NULL;  
     }
-
-    // aklima takilan soru su block header size hem alignmenta uyan bir deger olucak da sizeof(arena_t) bu olmazsa
 
     arena_t *arena = (arena_t *)addr;
 
     arena->id = arena_id_counter;
-    pthread_mutex_init(&arena->lock, NULL); // bunun sayesinde arena struct i ici lcok u kullanilabilir hale getiririz
+    pthread_mutex_init(&arena->lock, NULL);
 
     arena->start = (char *)addr;
     arena->end   = (char *)addr + size;
@@ -61,21 +80,15 @@ arena_t *arena_init(void *addr, size_t size, int use_mmap) {
     arena->next_fit_cursor = NULL;
     arena->is_mmap = use_mmap;
 
-    // c de adresi cast ettikten sonra fieldlari koymaya basladigimiz an adrese sirasiyla konur rastgele gitmez daha guzel aciklanabilir ama benden bu kadar
-
     arena_stats_reset(arena);
 
-    // bizde memory layout soyle
-    // |arena header| overhead (alignment kaybi) | block header | block payload ... |
-    // |<--------- size --------->|
-
     void *block_addr   = (void *)aligned;
-    // ilk blogun baslayacagi adres (headerinin)
+    // ilk block headerinin baslayacagi adres
 
-    // mmap ile aldigimiz size - arada kalan miktar cope gider alignmentta
-    size_t block_size  = size - (aligned - (uintptr_t)addr);
+    // mmap ile aldigimiz size - (arena header + overhead) // yani blcok icin kalan header ve payload alani
+    size_t block_header_plus_payload_size  = size - (aligned - (uintptr_t)addr);
 
-    block_header_t *first_block = block_init(block_addr, block_size);
+    block_header_t *first_block = block_init(block_addr, block_header_plus_payload_size);
     if (!first_block) {
         return NULL;
     }
@@ -166,19 +179,25 @@ void arena_destroy(arena_t *arena) {
     if (arena->is_mmap) {
         munmap(arena, arena->size);
     } else {
-        // sbrk shrink logic buraya gelecek
+        intptr_t diff = (intptr_t)sbrk(0) - (intptr_t)arena->end;
+        if (diff == 0) {
+            sbrk(-arena->size);
+        } else {
+            // logic sonra gelicek
+        }
     }
 }
 
-// payload size i parametre burda
-block_header_t *arena_find_free_block(arena_t *arena, size_t size) {
-    if (!arena || size == 0) {
+// parametre olan size block icin olan payload size'i
+block_header_t *arena_find_free_block(arena_t *arena, size_t block_payload_size) {
+    if (!arena || block_payload_size == 0) {
         return NULL;
     }
 
     pthread_mutex_lock(&arena->lock);
 
-    block_header_t* b =  policy_find_block(arena, size); // null donerse yeni arena olusturmasal minimum sararsal
+    block_header_t* b =  policy_find_block(arena, block_payload_size); 
+    // null donerse yeni arena olusturmasal minimum sararsal
 
     pthread_mutex_unlock(&arena->lock);
 

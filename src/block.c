@@ -21,8 +21,8 @@ static inline bool block_is_in_free_list(arena_t *arena, block_header_t *b) {
 
 // CRUICAL : cagirildiktan sonra ilk yapacagin sey arena id yi ayarlamak olucak.
 // ayrica bu parametre olan addr aligned degilse direk tum program kayar o kontrolu unutma
-block_header_t *block_init(void *addr, size_t arena_size) {
-    if (!addr || arena_size < BLOCK_HEADER_SIZE) {
+block_header_t *block_init(void *addr, size_t block_header_plus_paylaod) {
+    if (!addr || block_header_plus_paylaod < BLOCK_HEADER_SIZE) {
         return NULL;
     }
 
@@ -34,7 +34,7 @@ block_header_t *block_init(void *addr, size_t arena_size) {
     // yani 4097 istedi ya mesela kullanici 4096 * 2 verir
 
     // baslangicta tek bir büyük free block
-    block->size = arena_size - BLOCK_HEADER_SIZE; // sadece payload
+    block->size = block_header_plus_paylaod - BLOCK_HEADER_SIZE; // sadece payload
     block->requested_size = 0; // arena olusturulurken cagilircak fonksiyon oldugu icin req size 0
     block->free = 1;
 

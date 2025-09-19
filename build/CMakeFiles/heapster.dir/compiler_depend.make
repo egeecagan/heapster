@@ -278,6 +278,7 @@ CMakeFiles/heapster.dir/src/heapster.c.o: /Users/egecagankantar/Desktop/heapster
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/time.h \
   /Users/egecagankantar/Desktop/heapster/include/heapster.h \
   /Users/egecagankantar/Desktop/heapster/src/internal.h \
+  /Users/egecagankantar/Desktop/heapster/src/internal_f.h \
   /Users/egecagankantar/Desktop/heapster/src/stats.h
 
 CMakeFiles/heapster.dir/src/policy.c.o: /Users/egecagankantar/Desktop/heapster/src/policy.c \
@@ -453,6 +454,7 @@ CMakeFiles/heapster.dir/src/stats.c.o: /Users/egecagankantar/Desktop/heapster/sr
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/stdio.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/time.h \
   /Users/egecagankantar/Desktop/heapster/src/internal.h \
+  /Users/egecagankantar/Desktop/heapster/src/internal_f.h \
   /Users/egecagankantar/Desktop/heapster/src/stats.h
 
 
