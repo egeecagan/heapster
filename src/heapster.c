@@ -2,6 +2,7 @@
 #include "heapster.h"
 #include "internal.h"
 #include "internal_f.h"
+#include <stdbool.h>
 
 /*
 main function definitions of public api
@@ -25,7 +26,7 @@ heapster_policy_t heapster_get_policy(void) {
 }
 
 int heapster_init(size_t arena_size, heapster_policy_t policy) {
-    size_t min_size = sizeof(arena_t) + BLOCK_HEADER_SIZE + ALIGNMENT;
+    size_t min_size = ARENA_MIN_SIZE;
 
     if (arena_size < min_size) {
         fprintf(stderr, "[heapster] arena_size too small, using minimum %zu\n", min_size);
@@ -168,7 +169,13 @@ void *heapster_realloc(void *ptr, size_t size) {
         return NULL;
     }
 
-    memcpy(new_ptr, ptr, block->requested_size);
+    size_t old_used = block->requested_size; 
+    if (old_used > block->size)              
+        old_used = block->size;          
+
+    size_t copy_n = old_used < size ? old_used : size;
+
+    memcpy(new_ptr, ptr, copy_n);
 
     heapster_free(ptr);
 
@@ -184,12 +191,9 @@ sbrk ile alinmis ama ortadakilerden biri o zaman silme sadece reset
 */
 
 void heapster_free(void *ptr) {
-    if (!ptr) {
-        return;
-    }
+    if (!ptr) return;
 
     block_header_t *block = payload_to_block(ptr);
-
     if (block_validate(block) <= 0) {
         fprintf(stderr, "[heapster] invalid free %p\n", ptr);
         return;
@@ -205,7 +209,21 @@ void heapster_free(void *ptr) {
 
             block_coalesce(arena, block);
 
+            bool destroy = false;
+            if (arena->block_count == 1 &&
+                arena->free_list_head &&
+                !arena->free_list_head->phys_prev &&
+                !arena->free_list_head->phys_next &&
+                arena->free_list_head->size + BLOCK_HEADER_SIZE ==
+                   arena->size - ARENA_HEADER_SIZE) {
+                destroy = true;
+            }
+
             pthread_mutex_unlock(&arena->lock);
+
+            if (destroy) {
+                arena_destroy(arena);  // lock bırakıldıktan sonra
+            }
             return;
         }
         arena = arena->next;
@@ -213,4 +231,5 @@ void heapster_free(void *ptr) {
 
     fprintf(stderr, "[heapster] free: block %p not found in any arena\n", ptr);
 }
+
 

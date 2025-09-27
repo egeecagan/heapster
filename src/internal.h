@@ -62,6 +62,7 @@ typedef struct arena {
 
     // includes headers and payloads direk arenanin tum size i 
     size_t size; 
+    int64_t block_count;
 
     size_t requested_size;
 

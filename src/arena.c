@@ -92,6 +92,7 @@ arena_t *arena_init(void *addr, size_t size, int use_mmap) {
     size_t loss = total_block_size - aligned_total_block_size;
 
     block_header_t *first_block = block_init(block_addr, aligned_total_block_size);
+    arena->block_count = 1;
     if (!first_block) {
         return NULL;
     }
@@ -155,18 +156,19 @@ arena_t *arena_create(size_t size) {
     return arena;
 }
 
-// arena header haric tum data si 0 ile degisir (silinir)
+// arena header haric tum data si 0 ile degisir (silinir) ve arena header sonrasi block header ekler tek buyuk block
 void arena_clear(arena_t *arena) {
     if (!arena) {
         return;
     }
+
+    pthread_mutex_lock(&arena->lock);
 
     void *clear_start = (char *)arena + ARENA_HEADER_SIZE;
     size_t clear_size = arena->size - ARENA_HEADER_SIZE;
 
     arena->free_list_head = NULL;
     arena->next_fit_cursor = NULL;
-
     arena_stats_reset(arena);
 
     memset(clear_start, 0, clear_size);
@@ -176,8 +178,6 @@ void arena_clear(arena_t *arena) {
 
     void *block_addr = (void *)aligned;
     size_t total_block_size = arena->size - (aligned - (uintptr_t)arena);
-
-    // hizalanmış block boyutu
     size_t aligned_total_block_size = total_block_size & ~(ALIGNMENT - 1);
 
     block_header_t *first_block = block_init(block_addr, aligned_total_block_size);
@@ -185,7 +185,10 @@ void arena_clear(arena_t *arena) {
         first_block->arena_id = arena->id;
         arena->free_list_head = first_block;
         arena->next_fit_cursor = first_block;
+        arena->block_count = 1;
     }
+
+    pthread_mutex_unlock(&arena->lock);
 }
 
 
@@ -193,35 +196,44 @@ void arena_clear(arena_t *arena) {
 void arena_destroy(arena_t *arena) {
     if (!arena) return;
 
-    pthread_mutex_lock(&arena_list_lock);
+    if (arena->is_mmap) {
+        pthread_mutex_lock(&arena_list_lock);
+        if (arena_list_head == arena) {
+            arena_list_head = arena->next;
+        } else {
+            arena_t *prev = arena_list_head;
+            while (prev && prev->next != arena) prev = prev->next;
+            if (prev) prev->next = arena->next;
+        }
+        pthread_mutex_unlock(&arena_list_lock);
 
-    if (arena_list_head == arena) {
-        arena_list_head = arena->next;
-    } else {
-        arena_t *prev = arena_list_head;
-        while (prev && prev->next != arena) {
-            prev = prev->next;
-        }
-        if (prev) {
-            prev->next = arena->next;
-        }
+        pthread_mutex_destroy(&arena->lock);
+        munmap(arena, arena->size);
+        return;
     }
 
-    pthread_mutex_unlock(&arena_list_lock);
+    uintptr_t diff = (uintptr_t)sbrk(0) - (uintptr_t)arena->end;
 
-    pthread_mutex_destroy(&arena->lock);
-
-    if (arena->is_mmap) {
-        munmap(arena, arena->size);
-    } else {
-        uintptr_t diff = (uintptr_t)sbrk(0) - (uintptr_t)arena->end;
-        if (diff == 0) {
-            sbrk(-arena->size);
+    if (diff == 0) {
+        pthread_mutex_lock(&arena_list_lock);
+        if (arena_list_head == arena) {
+            arena_list_head = arena->next;
         } else {
-            arena_clear(arena); // arena header reseti aldi, block header yenilendi
+            arena_t *prev = arena_list_head;
+            while (prev && prev->next != arena) prev = prev->next;
+            if (prev) prev->next = arena->next;
         }
+        pthread_mutex_unlock(&arena_list_lock);
+
+        pthread_mutex_destroy(&arena->lock);
+        sbrk(-arena->size);
+    } else {
+        pthread_mutex_lock(&arena->lock);
+        arena_clear(arena); 
+        pthread_mutex_unlock(&arena->lock);
     }
 }
+
 
 // parametre olan size block icin olan payload size'i
 block_header_t *arena_find_free_block(arena_t *arena, size_t block_payload_size) {
@@ -246,7 +258,7 @@ void arena_dump(arena_t *arena) {
 
     pthread_mutex_lock(&arena->lock);
 
-    printf("===== arena %d =====\n", arena->id);
+    printf("===== arena %llu =====\n", (unsigned long long)arena->id);
     printf("start addr     : %p\n", arena->start);
     printf("end addr       : %p\n", arena->end);
     printf("total size     : %zu bytes\n", arena->size);

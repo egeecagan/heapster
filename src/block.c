@@ -142,7 +142,7 @@ block_header_t *block_split(arena_t *arena, block_header_t *block, size_t size) 
         block_remove_from_free_list(arena, block);
     }
 
-    void *new_addr = (char *)block + BLOCK_HEADER_SIZE + size;
+    void *new_addr = (char *)block + BLOCK_HEADER_SIZE + aligned_size;
     block_header_t *new_block = (block_header_t *)new_addr;
 
     // trailing free parca
@@ -167,6 +167,8 @@ block_header_t *block_split(arena_t *arena, block_header_t *block, size_t size) 
     block->free = 0;
     block->requested_size = 0;  // malloc tarafinda gercek requested_size set edilmeli
     block->phys_next = new_block;
+
+    arena->block_count += 1;
 
     // trailing free parca free list'e adres sirasina gore eklenir
     block_add_to_free_list(arena, new_block);
@@ -196,6 +198,7 @@ block_header_t *block_coalesce(arena_t *arena, block_header_t *block) {
         }
 
         block = prev; 
+        arena->block_count--;
     }
 
     while (block->phys_next && block->phys_next->free == 1) {
@@ -212,6 +215,7 @@ block_header_t *block_coalesce(arena_t *arena, block_header_t *block) {
         if (block->phys_next) {
             block->phys_next->phys_prev = block;
         }
+        arena->block_count--;
     }
 
     block_add_to_free_list(arena, block);
@@ -247,11 +251,13 @@ int block_validate(block_header_t *block) {
 
     void *payload = block_to_payload(block);
 
-    if (((uintptr_t)payload % ALIGNMENT) != 0)
+    if (((uintptr_t)payload % ALIGNMENT) != 0) {
         return -3;
+    }
 
-    if (block->size < BLOCK_MIN_SIZE)
+    if (block->size < MIN_PAYLOAD_SIZE) {
         return -4;
+    }
 
     if (block->free != 0 && block->free != 1)
         return -5;
@@ -266,7 +272,7 @@ void block_dump_free_list(arena_t *arena) {
         return;
     }
 
-    printf("[heapster] Free list for arena %d:\n", arena->id);
+    printf("[heapster] Free list for arena %llu:\n", (unsigned long long) arena->id);
 
     block_header_t *curr = arena->free_list_head;
     int index = 0;
