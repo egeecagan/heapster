@@ -1,14 +1,18 @@
 #ifndef HEAPSTER_INTERNAL_H
 #define HEAPSTER_INTERNAL_H
 
-#define ALIGNMENT 8
-#define CTRL_CHR   0xC0FFEE     // kahvesiz kod olmaz kral.
 
 #include <stddef.h>
 #include <stdint.h>
 #include <pthread.h>
-#include "stdio.h"
+#include <stdalign.h>
+#include <stdio.h>
+
 #include "stats.h"
+
+#define CTRL_CHR   0xC0FFEE     // kahvesiz kod olmaz kral.
+#define ALIGNMENT alignof(max_align_t)  
+// bir sistemde uyulabilecek max alignment miktaridir bende degeri 8
 
 extern pthread_mutex_t arena_list_lock;
 
@@ -76,21 +80,18 @@ typedef struct arena {
 // minimum block size (header only, without payload)
 // even a block is only a header this is the min size of the whole block
 
-// bu macro align edilebilir deger cikartir her halukarda bu da align etme formulu k&r a gore
+#define MIN_PAYLOAD_SIZE ALIGNMENT
+
+// sizeof(block_header_t) zaten alignof(block_header_t) nin bir kati cikar ama bu demek degil ki alignof(max_align_t) nin bir kati
 #define BLOCK_HEADER_SIZE \
     ((sizeof(block_header_t) + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1))
 
-#define BLOCK_MIN_SIZE (BLOCK_HEADER_SIZE)
+#define BLOCK_MIN_SIZE (BLOCK_HEADER_SIZE + MIN_PAYLOAD_SIZE)
 
 #define ARENA_HEADER_SIZE \
     ((sizeof(arena_t) + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1))
 
-#define ARENA_MIN_SIZE (ARENA_HEADER_SIZE)
-
-#define BLOCK_MISSED_SIZE \
-    (BLOCK_HEADER_SIZE - (sizeof(block_header_t)))
-
-#define ARENA_MISSED_SIZE \
-    (ARENA_HEADER_SIZE - (sizeof(arena_t)))
+#define ARENA_MIN_SIZE (ARENA_HEADER_SIZE + BLOCK_MIN_SIZE + (ALIGNMENT - 1))
+// sondaki alignment - 1 kismi bir alignment isleminde kaybolabilecek max deger
 
 #endif /* HEAPSTER_INTERNAL_H */

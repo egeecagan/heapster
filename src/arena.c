@@ -9,7 +9,8 @@
 static arena_t *arena_list_head = NULL; 
 /*
 program icinde olusturulan tum arenalar getter methodu ile (arena_get_list())
-ulasilir linked list yapisidir return_value->next ile devam edilir
+ulasilir linked list yapisidir return_value->next ile devam edilir sadece lock
+kullanimi var unutma
 */
 
 pthread_mutex_t arena_list_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -26,7 +27,7 @@ static uint64_t arena_id_counter = 1;
 tek amacım her arenaya farklı id gitmesidir silinen 
 arena icin totalden idleri degistirmek gibi bir 
 amacım yok ondan sadece increment ve bence int (
-4 byte) bunun icin yeterli bir miktar 2^32 farkli 
+8 byte) bunun icin yeterli bir miktar 2^64 farkli 
 deger yapar
 */
 
@@ -47,14 +48,11 @@ bu fonksiyon arena icin gerekli adres baslangicini alir ve arena_header
 block_header i olusturup bu adresin basina sirasiyla koyar. c de struct
 fieldlari pointerda adrese sirasiyla konur yani arena pointerina cevir-
 dikten sonra p->field dedigin an direk adresin basina koyar ve oyle devam
-eder. parametre olan size burada bizim mmap ya da sbrk ile elde ettigimizi
-dusundugumuz alan miktari yani mmap ya da sbrk ye gecirdigimiz deger ve bu
-size a arena header block header block payload baska block header ... her sey
-dahil
+eder. 
 */
 arena_t *arena_init(void *addr, size_t size, int use_mmap) {
     uintptr_t raw      = (uintptr_t)addr + ARENA_HEADER_SIZE; 
-    uintptr_t aligned  = (raw + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
+    uintptr_t aligned  = (raw + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1); // yukari
 
     size_t overhead   = aligned - (uintptr_t)addr;
 
@@ -63,7 +61,7 @@ arena_t *arena_init(void *addr, size_t size, int use_mmap) {
     // |<---------------------------------- size ---------------------------------->|
     // |arena start|                                                      |arena_end|
 
-    if (!addr || size < overhead + BLOCK_HEADER_SIZE + ARENA_HEADER_SIZE) {
+    if (!addr || size < overhead + BLOCK_MIN_SIZE + ARENA_HEADER_SIZE) {
         return NULL;  
     }
 
@@ -86,9 +84,14 @@ arena_t *arena_init(void *addr, size_t size, int use_mmap) {
     // ilk block headerinin baslayacagi adres
 
     // mmap ile aldigimiz size - (arena header + overhead) // yani blcok icin kalan header ve payload alani
-    size_t block_header_plus_payload_size  = size - (aligned - (uintptr_t)addr);
+    size_t total_block_size  = size - (aligned - (uintptr_t)addr);
 
-    block_header_t *first_block = block_init(block_addr, block_header_plus_payload_size);
+    // block_init ile olusan blockta alignment ile ugrasmamak icin assagiya yuvarlanir
+    size_t aligned_total_block_size = total_block_size & ~(ALIGNMENT - 1); 
+
+    size_t loss = total_block_size - aligned_total_block_size;
+
+    block_header_t *first_block = block_init(block_addr, aligned_total_block_size);
     if (!first_block) {
         return NULL;
     }
@@ -105,7 +108,7 @@ arena_t *arena_init(void *addr, size_t size, int use_mmap) {
 arena_t *arena_create(size_t size) {
 
     size_t page_size = sysconf(_SC_PAGE_SIZE);  // bende 4096 * 4 cikiyor mmap bunun kati kadar verir hep ve adres page aligned olur galiba
-    size_t alloc_size = (size + page_size - 1) & ~(page_size - 1); // kernelden alinan miktar gercek
+    size_t alloc_size = (size + page_size - 1) & ~(page_size - 1); // kernelden alinan miktar gercek yukari align edilcek page size a gore
 
     void *addr = NULL;
     arena_t *arena = NULL;
@@ -123,7 +126,8 @@ arena_t *arena_create(size_t size) {
         }
         arena = arena_init(addr, alloc_size, 1);
     } else {
-    // kaba minimum (overhead burada hesaplanamaz, çünkü addr daha alınmadı)
+
+    // kaba minimum (overhead burada hesaplanamaz cunku addr daha alınmadı)
         size_t min_size = ARENA_HEADER_SIZE + BLOCK_HEADER_SIZE + ALIGNMENT;
         if (size < min_size) {
             size = min_size;
@@ -134,11 +138,8 @@ arena_t *arena_create(size_t size) {
             return NULL;
         }
         addr = cur;
-
         arena = arena_init(addr, size, 0);
     }
-
-
 
     if (!arena) {
         return NULL;
@@ -233,7 +234,7 @@ void arena_dump(arena_t *arena) {
 }
 
 arena_t *arena_get_list(void) {
-    return arena_list_head; // dikkat: disarida lock kullanman gerekebilir
+    return arena_list_head;
 }
 
 int last_cleanup(void) {

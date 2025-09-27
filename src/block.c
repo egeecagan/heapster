@@ -1,14 +1,14 @@
 #include "internal.h"
 #include "internal_f.h"
 #include "heapster.h"
-#include <stdio.h>  
+
 #include <stdbool.h>
 
-
 static inline bool block_is_in_free_list(arena_t *arena, block_header_t *b) {
-    if (!arena || !b || b->free != 1) return false;
+    if (!arena || !b || b->free != 1) {
+        return false;
+    }
 
-    // yeni yontem cunku block farkli arenada ve uyarsa eski yontem de gene true doner bu direk for loop kontrolu
     block_header_t *curr = arena->free_list_head;
     while (curr) {
         if (curr == b) {
@@ -19,19 +19,27 @@ static inline bool block_is_in_free_list(arena_t *arena, block_header_t *b) {
     return false;
 }
 
-// CRUICAL : cagirildiktan sonra ilk yapacagin sey arena id yi ayarlamak olucak.
-// ayrica bu parametre olan addr aligned degilse direk tum program kayar o kontrolu unutma
-// header icin alignment sart degil ama payload align olmak zorunda
-block_header_t *block_init(void *addr, size_t block_header_plus_paylaod) {
-    if (!addr || block_header_plus_paylaod <= BLOCK_HEADER_SIZE) {
+/*
+bu fonksiyonu hangi arena icin cagirdiysak cagirma isleminden sonra ilk yapilmasi gereken sey
+block->arena_id yi set etmek olmalidir
+
+parametre olan adres alligned olabilir olmayadabilir ona gore onlem al tum program boyunca
+anladigim kadariyla header ici alignment sarj degil ama payload allign olmak zorunda
+
+bu functiona gelen adres cagiran tarafindan ALIGNMENT 'a gore hizzali gelmek zorundadir yoksa
+alignment karsiti hareket performans kaybina yol acar
+*/
+block_header_t *block_init(void *addr, size_t total_block_size) {
+
+    // block icin verilen tum size block'un overhead + alignli header + min payload icermeli
+    if (!addr || total_block_size < BLOCK_MIN_SIZE) {
         return NULL;
     }
+                         
+    block_header_t *block = (block_header_t *)addr;
 
-    block_header_t *block = (block_header_t *)addr; 
-
-    // baslangicta tek bir büyük free block
-    block->size = block_header_plus_paylaod - BLOCK_HEADER_SIZE; // sadece payload
-    block->requested_size = 0; // arena olusturulurken cagilircak fonksiyon oldugu icin req size 0
+    block->size = total_block_size - BLOCK_HEADER_SIZE;  // sadece payload boyutu
+    block->requested_size = 0;
     block->free = 1;
 
     block->next = NULL;
@@ -39,22 +47,22 @@ block_header_t *block_init(void *addr, size_t block_header_plus_paylaod) {
 
     block->phys_prev = NULL;
     block->phys_next = NULL;
-
     block->magic = CTRL_CHR;
-    block->arena_id = -1;   // coklu arena varsa disaridan set etmeyi düsün yoksa hata
+    block->arena_id = -1;
 
     return block;
 }
 
-/* insert a block into the free list (address-ordered) */
+/* insert the block into the free list of the given arena in an address ordered manner */
 void block_add_to_free_list(arena_t *arena, block_header_t *block) {
     
     if (!arena || !block) {
         return;
     }
 
-    // ayni blogu ikinci kez eklersen return etsin diye
-    if (block_is_in_free_list(arena, block)) return;
+    if (block_is_in_free_list(arena, block)) {
+        return;
+    }
 
     block->free = 1;
     block->requested_size = 0;
@@ -70,7 +78,9 @@ void block_add_to_free_list(arena_t *arena, block_header_t *block) {
     block->next = current;
     block->prev = prev;
 
-    if (current) current->prev = block;
+    if (current) {
+        current->prev = block;
+    }
 
     if (prev) {
         prev->next = block;
@@ -86,8 +96,13 @@ void block_add_to_free_list(arena_t *arena, block_header_t *block) {
 
 /* remove a block from the free list */
 void block_remove_from_free_list(arena_t *arena, block_header_t *block) {
-    if (!arena || !block) return;
-    if (!block_is_in_free_list(arena, block)) return;
+    if (!arena || !block) {
+        return;
+    }
+    
+    if (!block_is_in_free_list(arena, block)) {
+        return;
+    }
 
     if (block->prev) {
         block->prev->next = block->next;
@@ -107,20 +122,22 @@ void block_remove_from_free_list(arena_t *arena, block_header_t *block) {
     block->prev = NULL;
 }
 
-/* split: allocate leading part, keep trailing remainder free and on the free list */
+/* 
+split: allocate leading part, keep trailing remainder free and on the free list 
+size parametresi allocate edilen on parcanin payload miktari
+*/
 block_header_t *block_split(arena_t *arena, block_header_t *block, size_t size) {
     if (!arena || !block || block->free == 0) {
         return NULL;
     }
     
-    size = (size + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
+    // yukari yuvarlama 100 ise 112'ye yuvarlanir (alignment 16 ise) ve bu size allocate olcak free = 0 preceding block olarak
+    size_t aligned_size = (size + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
 
-    // block->size zaten payload size ayrimdan sonra 2. kisimda block olusturmasi icin en az bir adet daha header boyutu icermesi lazim
-    if (block->size < size + BLOCK_HEADER_SIZE + ALIGNMENT) {
+    if (block->size <= aligned_size + BLOCK_MIN_SIZE) {  // suan ki block paylaod kendisi icin miktar + header + kalan block kadar yer icermeli
         return NULL;
     }
 
-    // block free listteyse c ikar (allocate edilecek)
     if (block->free == 1 && block_is_in_free_list(arena, block)) {
         block_remove_from_free_list(arena, block);
     }
@@ -129,13 +146,12 @@ block_header_t *block_split(arena_t *arena, block_header_t *block, size_t size) 
     block_header_t *new_block = (block_header_t *)new_addr;
 
     // trailing free parca
-    new_block->size = block->size - (size + BLOCK_HEADER_SIZE);
+    new_block->size = block->size - (aligned_size + BLOCK_HEADER_SIZE);
     new_block->free = 1;
     new_block->requested_size = 0;
 
     new_block->next = NULL;
     new_block->prev = NULL;
-
     // fiziksel zincir
     new_block->phys_prev = block;
     new_block->phys_next = block->phys_next;
@@ -147,7 +163,7 @@ block_header_t *block_split(arena_t *arena, block_header_t *block, size_t size) 
     new_block->arena_id = block->arena_id;
 
     // allocate edilen on parca
-    block->size = size;
+    block->size = aligned_size;
     block->free = 0;
     block->requested_size = 0;  // malloc tarafinda gercek requested_size set edilmeli
     block->phys_next = new_block;
@@ -167,16 +183,13 @@ block_header_t *block_coalesce(arena_t *arena, block_header_t *block) {
     if (block->phys_prev && block->phys_prev->free == 1) {
         block_header_t *prev = block->phys_prev;
 
-
         if (block_is_in_free_list(arena, block)) {
             block_remove_from_free_list(arena, block);
         }
 
-
         prev->size += BLOCK_HEADER_SIZE + block->size;
         prev->requested_size = 0;
 
-        
         prev->phys_next = block->phys_next;
         if (prev->phys_next) {
             prev->phys_next->phys_prev = prev;
@@ -224,15 +237,17 @@ block_header_t *payload_to_block(void *payload) {
 
 /* check if a block is valid (magic number, alignment, etc.) */
 int block_validate(block_header_t *block) {
-    if (!block) return -1;
+    if (!block) {
+        return -1;
+    }
 
-    if (block->magic != CTRL_CHR)
+    if (block->magic != CTRL_CHR) {
         return -2;
+    }
 
     void *payload = block_to_payload(block);
-    size_t al = ALIGNMENT;
 
-    if (((uintptr_t)payload % al) != 0)
+    if (((uintptr_t)payload % ALIGNMENT) != 0)
         return -3;
 
     if (block->size < BLOCK_MIN_SIZE)
