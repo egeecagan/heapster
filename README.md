@@ -30,3 +30,12 @@ it was built as a learning project to better understand:
 - heap management with sbrk
 - page allocation with mmap
 - basic thread safety in c
+
+## how to use it
+1. create a build folder in the project and change your directory
+2. `cmake ..` and then `make`
+3. now you have a static library file inside the build folder
+4. copy that file to the directory you want to use
+5. also copy the heapster.h file inside the include directory
+6. and then you can use the functions inside the public api
+7. compile it using `clang main.c -o main -I. -L. -lheapster -lpthread` for example
