@@ -1,3 +1,0 @@
-/Users/egecagankantar/Developer/heapster/build/CMakeFiles/heapster.dir
-/Users/egecagankantar/Developer/heapster/build/CMakeFiles/edit_cache.dir
-/Users/egecagankantar/Developer/heapster/build/CMakeFiles/rebuild_cache.dir
