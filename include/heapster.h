@@ -29,8 +29,6 @@ heapster_policy_t heapster_get_policy(void);
 void heapster_set_mmap_threshold(size_t bytes);
 size_t heapster_get_mmap_threshold(void);
 
-int heapster_validate_heap(void);
-
 int heapster_init(size_t arena_size, heapster_policy_t policy);
 int heapster_finalize(void);
 

@@ -155,6 +155,40 @@ arena_t *arena_create(size_t size) {
     return arena;
 }
 
+// arena header haric tum data si 0 ile degisir (silinir)
+void arena_clear(arena_t *arena) {
+    if (!arena) {
+        return;
+    }
+
+    void *clear_start = (char *)arena + ARENA_HEADER_SIZE;
+    size_t clear_size = arena->size - ARENA_HEADER_SIZE;
+
+    arena->free_list_head = NULL;
+    arena->next_fit_cursor = NULL;
+
+    arena_stats_reset(arena);
+
+    memset(clear_start, 0, clear_size);
+
+    uintptr_t raw     = (uintptr_t)arena + ARENA_HEADER_SIZE;
+    uintptr_t aligned = (raw + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
+
+    void *block_addr = (void *)aligned;
+    size_t total_block_size = arena->size - (aligned - (uintptr_t)arena);
+
+    // hizalanmış block boyutu
+    size_t aligned_total_block_size = total_block_size & ~(ALIGNMENT - 1);
+
+    block_header_t *first_block = block_init(block_addr, aligned_total_block_size);
+    if (first_block) {
+        first_block->arena_id = arena->id;
+        arena->free_list_head = first_block;
+        arena->next_fit_cursor = first_block;
+    }
+}
+
+
 
 void arena_destroy(arena_t *arena) {
     if (!arena) return;
@@ -180,11 +214,11 @@ void arena_destroy(arena_t *arena) {
     if (arena->is_mmap) {
         munmap(arena, arena->size);
     } else {
-        intptr_t diff = (intptr_t)sbrk(0) - (intptr_t)arena->end;
+        uintptr_t diff = (uintptr_t)sbrk(0) - (uintptr_t)arena->end;
         if (diff == 0) {
             sbrk(-arena->size);
         } else {
-            // logic sonra gelicek
+            arena_clear(arena); // arena header reseti aldi, block header yenilendi
         }
     }
 }
@@ -198,7 +232,6 @@ block_header_t *arena_find_free_block(arena_t *arena, size_t block_payload_size)
     pthread_mutex_lock(&arena->lock);
 
     block_header_t* b =  policy_find_block(arena, block_payload_size); 
-    // null donerse yeni arena olusturmasal minimum sararsal
 
     pthread_mutex_unlock(&arena->lock);
 

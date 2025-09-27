@@ -126,3 +126,91 @@ void *heapster_calloc(size_t nmemb, size_t size) {
     memset(ptr, 0, total); 
     return ptr;
 }
+
+void *heapster_realloc(void *ptr, size_t size) {
+
+    if (!ptr) {
+        return heapster_malloc(size);
+    }
+    if (size == 0) {
+        heapster_free(ptr);
+        return NULL;
+    }
+
+    block_header_t *block = payload_to_block(ptr);
+
+    if (block_validate(block) <= 0) {
+        fprintf(stderr, "[heapster] invalid realloc %p\n", ptr);
+        return NULL;
+    }
+
+    size_t aligned_payload_size = (size + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
+
+    if (block->size >= aligned_payload_size) {
+        if (block->size >= aligned_payload_size + BLOCK_MIN_SIZE) {
+            arena_t *arena = arena_get_list();
+            while (arena) {
+                if (arena->id == block->arena_id) {
+                    pthread_mutex_lock(&arena->lock);
+                    block_split(arena, block, aligned_payload_size);
+                    pthread_mutex_unlock(&arena->lock);
+                    break;
+                }
+                arena = arena->next;
+            }
+        }
+        block->requested_size = size;
+        return ptr;
+    }
+
+    void *new_ptr = heapster_malloc(size);
+    if (!new_ptr) {
+        return NULL;
+    }
+
+    memcpy(new_ptr, ptr, block->requested_size);
+
+    heapster_free(ptr);
+
+    return new_ptr;
+}
+
+/* 
+arena mmap ile alindi ve tek blok var bu coalesce sonrasi arenayi sil
+tek block yok 2 3 tane var silme
+
+sbrk ile alinmis arena ama en sondaki ise sil tamamen
+sbrk ile alinmis ama ortadakilerden biri o zaman silme sadece reset
+*/
+
+void heapster_free(void *ptr) {
+    if (!ptr) {
+        return;
+    }
+
+    block_header_t *block = payload_to_block(ptr);
+
+    if (block_validate(block) <= 0) {
+        fprintf(stderr, "[heapster] invalid free %p\n", ptr);
+        return;
+    }
+
+    arena_t *arena = arena_get_list();
+    while (arena) {
+        if (arena->id == block->arena_id) {
+            pthread_mutex_lock(&arena->lock);
+
+            block->free = 1;
+            block->requested_size = 0;
+
+            block_coalesce(arena, block);
+
+            pthread_mutex_unlock(&arena->lock);
+            return;
+        }
+        arena = arena->next;
+    }
+
+    fprintf(stderr, "[heapster] free: block %p not found in any arena\n", ptr);
+}
+
