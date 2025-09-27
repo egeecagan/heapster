@@ -25,7 +25,7 @@ static inline void arena_stats_print(const arena_t *arena) {
 
     const heapster_stats_t *stats = &arena->stats;
 
-    printf("===== heapster statistics (arena id %d) =====\n", arena->id);
+    printf("===== heapster statistics (arena id %llu) =====\n", (unsigned long long)arena->id);
     printf("total heap bytes     : %zu\n", stats->total_bytes);
     printf("used bytes           : %zu\n", stats->used_bytes);
     printf("free bytes           : %zu\n", stats->free_bytes);

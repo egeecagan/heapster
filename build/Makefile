@@ -57,10 +57,10 @@ RM = /opt/homebrew/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/egecagankantar/Desktop/heapster
+CMAKE_SOURCE_DIR = /Users/egecagankantar/Developer/heapster
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/egecagankantar/Desktop/heapster/build
+CMAKE_BINARY_DIR = /Users/egecagankantar/Developer/heapster/build
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -87,9 +87,9 @@ rebuild_cache/fast: rebuild_cache
 
 # The main all target
 all: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/egecagankantar/Desktop/heapster/build/CMakeFiles /Users/egecagankantar/Desktop/heapster/build//CMakeFiles/progress.marks
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/egecagankantar/Developer/heapster/build/CMakeFiles /Users/egecagankantar/Developer/heapster/build//CMakeFiles/progress.marks
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/egecagankantar/Desktop/heapster/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/egecagankantar/Developer/heapster/build/CMakeFiles 0
 .PHONY : all
 
 # The main clean target

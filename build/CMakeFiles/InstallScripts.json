@@ -1,7 +1,7 @@
 {
 	"InstallScripts" : 
 	[
-		"/Users/egecagankantar/Desktop/heapster/build/cmake_install.cmake"
+		"/Users/egecagankantar/Developer/heapster/build/cmake_install.cmake"
 	],
 	"Parallel" : false
 }

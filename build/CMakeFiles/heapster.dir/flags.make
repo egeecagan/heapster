@@ -4,7 +4,7 @@
 # compile C with /usr/bin/cc
 C_DEFINES = 
 
-C_INCLUDES = -I/Users/egecagankantar/Desktop/heapster/include -I/Users/egecagankantar/Desktop/heapster/src
+C_INCLUDES = -I/Users/egecagankantar/Developer/heapster/include -I/Users/egecagankantar/Developer/heapster/src
 
 C_FLAGSarm64 = -std=gnu11 -arch arm64
 

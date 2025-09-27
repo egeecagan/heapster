@@ -3,6 +3,7 @@
 #include "internal.h"
 #include "internal_f.h"
 #include <stdbool.h>
+#include <string.h>
 
 /*
 main function definitions of public api
