@@ -12,17 +12,15 @@
 
 #define CTRL_CHR   0xC0FFEE     // kahvesiz kod olmaz kral.
 #define ALIGNMENT alignof(max_align_t)  
-// bir sistemde uyulabilecek max alignment miktaridir bende degeri 8
+// bir sistemde uyulabilecek max alignment miktaridir bende degeri 8 bunu ayarlanabilir yapmayi denedim ama zor oldu ondan sildim
 
 extern pthread_mutex_t arena_list_lock;
 
 typedef struct block_header {
-    size_t size;  // size of the payload (user-allocated memory) not including the block header itself
+    size_t size;  // size of the block except header
     int free;     // allocation flag: 1 = free (available in free list), 0 = allocated (owned by user)
 
-    // if requested size is 30 bytes for ex the allocator will still allocate the min size
-    // by this way we can calculate wasted space and log it
-    size_t requested_size;
+    size_t requested_size; // what did user want bundan kast edilen block diyelim 4096 byte ama kullanici 100 istedi o zaman 100
 
     // doubly linked list pointers for managing free blocks (only valid when free == 1)
     struct block_header *next;  
@@ -95,4 +93,4 @@ typedef struct arena {
 #define ARENA_MIN_SIZE (ARENA_HEADER_SIZE + BLOCK_MIN_SIZE + (ALIGNMENT - 1))
 // sondaki alignment - 1 kismi bir alignment isleminde kaybolabilecek max deger
 
-#endif /* HEAPSTER_INTERNAL_H */
+#endif // end of HEAPSTER_INTERNAL_H

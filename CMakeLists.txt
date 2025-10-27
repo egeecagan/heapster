@@ -13,6 +13,9 @@ add_library(heapster STATIC
 )
 
 target_include_directories(heapster
-    PUBLIC ${PROJECT_SOURCE_DIR}/include
-    PRIVATE ${PROJECT_SOURCE_DIR}/src
+    PUBLIC 
+        ${PROJECT_SOURCE_DIR}/include
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src              # for .c to include local headers
+        ${PROJECT_SOURCE_DIR}/src/internal     # internal headers
 )

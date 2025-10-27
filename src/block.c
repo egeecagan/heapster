@@ -24,7 +24,7 @@ bu fonksiyonu hangi arena icin cagirdiysak cagirma isleminden sonra ilk yapilmas
 block->arena_id yi set etmek olmalidir
 
 parametre olan adres alligned olabilir olmayadabilir ona gore onlem al tum program boyunca
-anladigim kadariyla header ici alignment sarj degil ama payload allign olmak zorunda
+anladigim kadariyla header icin alignment sart degil ama payload allign olmak zorunda
 
 bu functiona gelen adres cagiran tarafindan ALIGNMENT 'a gore hizzali gelmek zorundadir yoksa
 alignment karsiti hareket performans kaybina yol acar
@@ -32,6 +32,7 @@ alignment karsiti hareket performans kaybina yol acar
 block_header_t *block_init(void *addr, size_t total_block_size) {
 
     // block icin verilen tum size block'un overhead + alignli header + min payload icermeli
+    // overhead dedigimiz deger alignment kaybi.
     if (!addr || total_block_size < BLOCK_MIN_SIZE) {
         return NULL;
     }
@@ -126,6 +127,9 @@ void block_remove_from_free_list(arena_t *arena, block_header_t *block) {
 split: allocate leading part, keep trailing remainder free and on the free list 
 size parametresi allocate edilen on parcanin payload miktari
 */
+/* split: allocate leading part, keep trailing remainder free and on the free list 
+size parametresi allocate edilen on parcanin payload miktari
+*/
 block_header_t *block_split(arena_t *arena, block_header_t *block, size_t size) {
     if (!arena || !block || block->free == 0) {
         return NULL;
@@ -134,7 +138,7 @@ block_header_t *block_split(arena_t *arena, block_header_t *block, size_t size) 
     // yukari yuvarlama 100 ise 112'ye yuvarlanir (alignment 16 ise) ve bu size allocate olcak free = 0 preceding block olarak
     size_t aligned_size = (size + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
 
-    if (block->size <= aligned_size + BLOCK_MIN_SIZE) {  // suan ki block paylaod kendisi icin miktar + header + kalan block kadar yer icermeli
+    if (block->size <= aligned_size + BLOCK_MIN_SIZE) { 
         return NULL;
     }
 
@@ -145,7 +149,7 @@ block_header_t *block_split(arena_t *arena, block_header_t *block, size_t size) 
     void *new_addr = (char *)block + BLOCK_HEADER_SIZE + aligned_size;
     block_header_t *new_block = (block_header_t *)new_addr;
 
-    // trailing free parca
+    // trailing free parca (fiziksel zincir ve free list işlemleri...)
     new_block->size = block->size - (aligned_size + BLOCK_HEADER_SIZE);
     new_block->free = 1;
     new_block->requested_size = 0;
@@ -165,13 +169,19 @@ block_header_t *block_split(arena_t *arena, block_header_t *block, size_t size) 
     // allocate edilen on parca
     block->size = aligned_size;
     block->free = 0;
-    block->requested_size = 0;  // malloc tarafinda gercek requested_size set edilmeli
+    block->requested_size = 0; 
     block->phys_next = new_block;
 
     arena->block_count += 1;
 
     // trailing free parca free list'e adres sirasina gore eklenir
     block_add_to_free_list(arena, new_block);
+
+    // *********************************************************
+    // İSTATİSTİK GÜNCELLEMESİ (SPLIT)
+    // Yeni bir serbest blok oluşturulduğu için sayım 1 artar.
+    arena->stats.free_block_count++; 
+    // *********************************************************
 
     return block; // not: caller genelde allocate edilen 'block' ile ilgilenir
 }

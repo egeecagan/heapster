@@ -52,16 +52,27 @@ eder.
 */
 arena_t *arena_init(void *addr, size_t size, int use_mmap) {
     uintptr_t raw      = (uintptr_t)addr + ARENA_HEADER_SIZE; 
-    uintptr_t aligned  = (raw + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1); // yukari
-
-    size_t overhead   = aligned - (uintptr_t)addr;
+    uintptr_t aligned  = (raw + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1); 
+    
+    size_t overhead   = aligned - (uintptr_t)addr; // arena_header_size + padding degeridir
+    /*
+    addr mmap den page aligned ve alignof(max_align_t) ikisinede bolunecek sekilde gelir garanti sekilde
+    addr a arena_header_size ekledik bu header size da alignof(max_align_t) a gore align bir degerdir
+    [a mod n == 0 && b mod n == 0 -> (a + b) mod n == 0] bu kurali kullanarak aslinda aligned == raw oldugunu
+    anlariz cunku zaten raw aligned bir deger bir daha align etmek bir sey degistirmez burda altta hesaplanan
+    overhead de bize sadece arena_header_size i geri verir aslinda
+    */
+    if (raw != aligned) {
+        fprintf(stderr, "[fatal error] misaligned memory start in arena_init padding needed: %zu bytes.\n", (size_t)(aligned - raw));
+    }
 
     // bizde memory layout soyle
     // |arena header| overhead (alignment kaybi) | block header | block payload ... |
     // |<---------------------------------- size ---------------------------------->|
     // |arena start|                                                      |arena_end|
 
-    if (!addr || size < overhead + BLOCK_MIN_SIZE + ARENA_HEADER_SIZE) {
+    if (!addr || size < overhead + BLOCK_MIN_SIZE) {
+        fprintf(stderr, "[fatal error] very small size argument passed to the arena_init");
         return NULL;  
     }
 
@@ -83,13 +94,13 @@ arena_t *arena_init(void *addr, size_t size, int use_mmap) {
     void *block_addr   = (void *)aligned;
     // ilk block headerinin baslayacagi adres
 
-    // mmap ile aldigimiz size - (arena header + overhead) // yani blcok icin kalan header ve payload alani
+    // mmap ile aldigimiz size - (arena header + padding) // yani blcok icin kalan header ve payload alani
     size_t total_block_size  = size - (aligned - (uintptr_t)addr);
 
     // block_init ile olusan blockta alignment ile ugrasmamak icin assagiya yuvarlanir
     size_t aligned_total_block_size = total_block_size & ~(ALIGNMENT - 1); 
 
-    size_t loss = total_block_size - aligned_total_block_size;
+    size_t loss = total_block_size - aligned_total_block_size; // either 0 or bigger
 
     block_header_t *first_block = block_init(block_addr, aligned_total_block_size);
     arena->block_count = 1;
@@ -101,20 +112,30 @@ arena_t *arena_init(void *addr, size_t size, int use_mmap) {
 
     arena->free_list_head   = first_block;
     arena->next_fit_cursor  = first_block;
+
+    arena->stats.total_bytes = size;
+    arena->stats.free_bytes  = first_block->size;
+    arena->stats.largest_free_block = first_block->size;
+    arena->stats.free_block_count = 1;
+    arena->stats.allocated_block_count = 0;
     
     return arena;
 }
 
-// parametre olan size kullanicinin istedigi miktar olucak burda
+/* 
+*   size =  (kullanicinin istedigi payload size i up align edilmis) + 
+*           (block_header_size up align edilmis)                    + 
+*           (arena_header_size up align edilmis)
+*/
 arena_t *arena_create(size_t size) {
 
-    size_t page_size = sysconf(_SC_PAGE_SIZE);  // bende 4096 * 4 cikiyor mmap bunun kati kadar verir hep ve adres page aligned olur galiba
+    size_t page_size = sysconf(_SC_PAGE_SIZE);  
     size_t alloc_size = (size + page_size - 1) & ~(page_size - 1); // kernelden alinan miktar gercek yukari align edilcek page size a gore
 
     void *addr = NULL;
     arena_t *arena = NULL;
     // kullanici mmap den size ister ama mmap page aligned bir adres ve page size in kati olacak sekilde adres verir
-    // misal kullanici 4070 byte istedi mmap page size 4096 ise 4096 verir ve bunu aligned bir adres olarak verir (%99)
+    // ama bu verilen adres zaten oldugun sistemde alignof(max_align_t) bunun align istegini karsilar
     if (size >= heapster_get_mmap_threshold()) {
         addr = mmap(NULL, alloc_size,
                     PROT_READ | PROT_WRITE,
@@ -125,11 +146,11 @@ arena_t *arena_create(size_t size) {
         if (addr == MAP_FAILED) {
             return NULL;
         }
-        arena = arena_init(addr, alloc_size, 1);
+        arena = arena_init(addr, alloc_size, 1); // girilen adres page aligned bir adres ayni zamanda alignof(max_align_t) aligned
     } else {
 
     // kaba minimum (overhead burada hesaplanamaz cunku addr daha alınmadı)
-        size_t min_size = ARENA_HEADER_SIZE + BLOCK_HEADER_SIZE + ALIGNMENT;
+        size_t min_size = ARENA_HEADER_SIZE + BLOCK_MIN_SIZE;
         if (size < min_size) {
             size = min_size;
         }
@@ -186,6 +207,13 @@ void arena_clear(arena_t *arena) {
         arena->free_list_head = first_block;
         arena->next_fit_cursor = first_block;
         arena->block_count = 1;
+
+        arena->stats.total_bytes = arena->size;
+        arena->stats.free_bytes = first_block->size;
+        arena->stats.largest_free_block = first_block->size;
+        arena->stats.free_block_count = 1;
+        arena->stats.allocated_block_count = 0; // Bu zaten reset ile 0'lanmış olabilir, ancak açıkça belirtmek güvenlidir.
+
     }
 
     pthread_mutex_unlock(&arena->lock);
@@ -265,11 +293,11 @@ void arena_dump(arena_t *arena) {
     printf("free list head : %p\n", (void *)arena->free_list_head);
     printf("next fit cursor: %p\n", (void *)arena->next_fit_cursor);
 
-    printf("--- stats ---\n");
-    printf("used bytes     : %zu\n", arena->stats.used_bytes);
-    printf("free bytes     : %zu\n", arena->stats.free_bytes);
-    printf("alloc calls    : %llu\n", (unsigned long long)arena->stats.alloc_calls);
-    printf("free calls     : %llu\n", (unsigned long long)arena->stats.free_calls);
+    // printf("--- stats ---\n");
+    // printf("used bytes     : %zu\n", arena->stats.used_bytes);
+    // printf("free bytes     : %zu\n", arena->stats.free_bytes);
+    // printf("alloc calls    : %llu\n", (unsigned long long)arena->stats.alloc_calls);
+    // printf("free calls     : %llu\n", (unsigned long long)arena->stats.free_calls);
 
     block_dump_free_list(arena);
 

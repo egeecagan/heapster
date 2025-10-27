@@ -34,7 +34,7 @@ static inline void arena_stats_print(const arena_t *arena) {
     printf("allocated blocks     : %zu\n", stats->allocated_block_count);
     printf("wasted bytes         : %zu\n", stats->wasted_bytes);
     printf("fragmentation ratio  : %.2f\n", stats->fragmentation_ratio);
-    printf("alloc calls          : %llu\n", (unsigned long long)stats->alloc_calls);
+    printf("alloc calls          : %llu\n", (unsigned long long)stats->malloc_calls);
     printf("free calls           : %llu\n", (unsigned long long)stats->free_calls);
     printf("realloc calls        : %llu\n", (unsigned long long)stats->realloc_calls);
     printf("calloc calls         : %llu\n", (unsigned long long)stats->calloc_calls);

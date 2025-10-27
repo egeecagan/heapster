@@ -16,6 +16,7 @@ static inline void arena_stats_print(const arena_t *arena);
 
 block_header_t *block_init(void *addr, size_t arena_size);
 void block_dump_free_list(arena_t *arena);
+void block_remove_from_free_list(arena_t *arena, block_header_t *block);
 
 arena_t *arena_create(size_t size);
 
@@ -27,4 +28,5 @@ void *block_to_payload(block_header_t *block);
 int block_validate(block_header_t *block);
 void arena_destroy(arena_t *arena);
 block_header_t *block_coalesce(arena_t *arena, block_header_t *block);
-#endif
+
+#endif // end of HEAPSTER_INTERNAL_F_H

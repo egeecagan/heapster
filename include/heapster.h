@@ -1,5 +1,5 @@
 /*
- * heapster — custom heap memory allocator
+ * heapster — custom heap memory allocator developed for experimenting purposes
  */
 
 #ifndef HEAPSTER_H
@@ -7,10 +7,14 @@
 
 #include <stddef.h>
 
+// I wanted to make the header file compatible with cpp but I do not think it works with cpp (did not try)
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/*
+    User can choose from different block selection strategies
+*/
 typedef enum {
     HEAPSTER_FIRST_FIT     = 0,
     HEAPSTER_NEXT_FIT      = 1,
@@ -36,4 +40,4 @@ int heapster_finalize(void);
 }
 #endif
 
-#endif /* HEAPSTER_H */
+#endif /* end of HEAPSTER_H */
