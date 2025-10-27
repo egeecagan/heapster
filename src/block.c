@@ -187,11 +187,13 @@ block_header_t *block_split(arena_t *arena, block_header_t *block, size_t size) 
 }
 
 /* coalesce: merge with left and then as many rights as possible; returns leftmost merged free block */
+/* coalesce: merge with left and then as many rights as possible; returns leftmost merged free block */
 block_header_t *block_coalesce(arena_t *arena, block_header_t *block) {
     if (!arena || !block || block->free != 1) {
         return NULL;
     }
 
+    // 1. ÖNCEKİ BLOK İLE BİRLEŞTİRME (LEFT COALESCING)
     if (block->phys_prev && block->phys_prev->free == 1) {
         block_header_t *prev = block->phys_prev;
 
@@ -209,8 +211,14 @@ block_header_t *block_coalesce(arena_t *arena, block_header_t *block) {
 
         block = prev; 
         arena->block_count--;
+        
+        // *********************************************************
+        // İSTATİSTİK GÜNCELLEMESİ (LEFT MERGE)
+        arena->stats.free_block_count--;
+        // *********************************************************
     }
 
+    // 2. SONRAKİ BLOKLAR İLE BİRLEŞTİRME (RIGHT COALESCING)
     while (block->phys_next && block->phys_next->free == 1) {
         block_header_t *next = block->phys_next;
 
@@ -226,9 +234,18 @@ block_header_t *block_coalesce(arena_t *arena, block_header_t *block) {
             block->phys_next->phys_prev = block;
         }
         arena->block_count--;
+        
+        // *********************************************************
+        // İSTATİSTİK GÜNCELLEMESİ (RIGHT MERGE)
+        arena->stats.free_block_count--;
+        // *********************************************************
     }
 
     block_add_to_free_list(arena, block);
+    
+    // ** largest_free_block güncellenmesi burada yapılmaz **
+    // Bu, genellikle free/malloc fonksiyonlarında (heapster.c) yapılır,
+    // çünkü coalesce çağrıldığında o anki en büyük bloğun değişip değişmediğini bilmek önemlidir.
 
     return block; 
 }
