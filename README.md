@@ -2,7 +2,7 @@
 
 **Heapster** is a comprehensive custom memory allocator written in C, providing replacement implementations for the standard C library functions (`malloc`, `free`, `realloc`, `calloc`).
 
-Developed as a deep-dive learning project, Heapster focuses on implementing advanced **system programming concepts**, **concurrency mechanisms**, and **memory management strategies** essential for low-level engineering roles. The primary goal was to achieve a profound, hands-on understanding of these core functions.
+Developed as a deep-dive learning project, Heapster focuses on implementing advanced **system programming concepts**, **concurrency mechanisms**, memory alignment, and **memory management strategies** essential for low-level engineering roles. The primary goal was to achieve a profound, hands-on understanding of these core functions.
 
 ## 📐 Core Architectural Features
 
@@ -45,6 +45,12 @@ The allocator utilizes a **hybrid approach** to interact with the operating syst
 A key focus of this project was exploring methods for safe concurrent memory access. **Thread Safety** was attempted by protecting critical sections (like updating free lists or modifying arena structures) with POSIX **`pthread_mutexes`**. This mechanism aims to ensure data integrity when multiple threads call `malloc` or `free` simultaneously. *While the architecture is designed for thread safety via arenas and mutexes, a dedicated stress test suite is required to validate its robustness under all concurrent workloads.*
 
 ---
+### 8. Strict Memory Alignment
+To ensure **maximum performance and portability** across different hardware architectures, Heapster enforces strict memory alignment rules:
+* **Page Alignment:** All large memory allocations obtained via `mmap()` are **page-aligned** to optimize virtual memory operations and reduce page-level fragmentation.
+* **Internal Alignment:** All internal metadata (headers) and the user-facing payload are aligned to the system's maximum alignment boundary (e.g., `alignof(max_align_t)`). This prevents unaligned memory access issues and ensures optimal data access speeds for modern CPUs.
+
+---
 ## 🚀 How to Use It
 
 To build and integrate the Heapster library into your C project:
@@ -78,6 +84,7 @@ While this allocator is **not intended for production use**, it serves as a robu
 * Low-level mechanics of splitting and merging free blocks.
 * Heap management using `sbrk()` and page allocation via `mmap()`.
 * Basic C concurrency using `pthread_mutexes`.
+
 
 
 
