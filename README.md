@@ -8,6 +8,7 @@ Developed as a deep-dive learning project, Heapster focuses on implementing adva
 
 Heapster's design focuses on efficiency, low fragmentation, and multi-threaded scalability, showcasing mastery of complex memory management challenges.
 
+---
 ### 1. Custom Memory Arenas
 Instead of relying on a single global lock for all memory operations, **Custom Memory Arenas** manage independent, isolated memory regions. This design is crucial for **reducing lock contention overhead** in a concurrent environment, allowing multiple threads to allocate memory simultaneously from different arenas. This directly addresses **scalability issues** common in single-heap allocators.
 
@@ -43,6 +44,7 @@ The allocator utilizes a **hybrid approach** to interact with the operating syst
 ### 7. Concurrency Mechanism (Thread Safety Attempt)
 A key focus of this project was exploring methods for safe concurrent memory access. **Thread Safety** was attempted by protecting critical sections (like updating free lists or modifying arena structures) with POSIX **`pthread_mutexes`**. This mechanism aims to ensure data integrity when multiple threads call `malloc` or `free` simultaneously. *While the architecture is designed for thread safety via arenas and mutexes, a dedicated stress test suite is required to validate its robustness under all concurrent workloads.*
 
+---
 ## 🚀 How to Use It
 
 To build and integrate the Heapster library into your C project:
@@ -76,5 +78,6 @@ While this allocator is **not intended for production use**, it serves as a robu
 * Low-level mechanics of splitting and merging free blocks.
 * Heap management using `sbrk()` and page allocation via `mmap()`.
 * Basic C concurrency using `pthread_mutexes`.
+
 
 
