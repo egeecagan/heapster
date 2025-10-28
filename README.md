@@ -1,12 +1,21 @@
-# ☀︎ Heapster: a custom memory allocator (for learning purposes )
+# ☀︎ Heapster: a custom memory allocator (for educational purposes )
 heapster is a custom dynamic memory allocator written in c
 it provides replacements for the standard malloc, free, realloc, and calloc functions implemented on top of low level system calls such as sbrk() and mmap()
+developed as a deep-dive learning project, heapster demonstrates advanced system programming concepts, and memory management strategies for operating systems and low-level engineering roles
 
 the main goal of this project is for my better understanding of memory allocation functions
 
- ## features
-- custom arenas to manage memory regions
-- block headers for tracking size, free/used state, and links
+ ## core architectural features
+ 
+### 1. custom memory arenas
+instead of relying on a single global lock for all memory operations, custom memory arenas manage independent, isolated memory regions. this design is crucial for reducing lock contention (reducing contention overhead) in a concurrent environment, allowing multiple threads to allocate memory simultaneously from different arenas. this directly addresses scalability issues common in single heap allocators.
+
+### 2. block headers and metadata
+each memory block (both free and used) contains dedicated block headers. this metadata structure is critical for: 
+tracking state: storing the current block size and its free/used status.
+navigation: for free blocks, the header holds links (pointers) to the next and previous free blocks in the explicit free list of each arena. this allows the allocator to find an appropriate free block very fast (or faster, depending on the strategy) without scanning the entire heap.
+
+
 - block splitting when a larger block is partially allocated
 - block coalescing when adjacent free blocks are merged
 - multiple allocation strategies -> first-fit, next-fit, best-fit, worst-fit
@@ -39,3 +48,4 @@ it was built as a learning project to better understand:
 5. also copy the heapster.h file inside the include directory
 6. and then you can use the functions inside the public api
 7. compile it using `clang main.c -o main -I. -L. -lheapster -lpthread` for example
+
