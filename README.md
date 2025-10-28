@@ -12,8 +12,8 @@ instead of relying on a single global lock for all memory operations, custom mem
 
 ### 2. block headers and metadata
 each memory block (both free and used) contains dedicated block headers. this metadata structure is critical for: 
-tracking state: storing the current block size and its free/used status.
-navigation: for free blocks, the header holds links (pointers) to the next and previous free blocks in the explicit free list of each arena. this allows the allocator to find an appropriate free block very fast (or faster, depending on the strategy) without scanning the entire heap.
+a) tracking state: storing the current block size and its free/used status.
+b) navigation: for free blocks, the header holds links (pointers) to the next and previous free blocks in the explicit free list of each arena. this allows the allocator to find an appropriate free block very fast (or faster, depending on the strategy) without scanning the entire heap.
 
 
 - block splitting when a larger block is partially allocated
@@ -48,4 +48,5 @@ it was built as a learning project to better understand:
 5. also copy the heapster.h file inside the include directory
 6. and then you can use the functions inside the public api
 7. compile it using `clang main.c -o main -I. -L. -lheapster -lpthread` for example
+
 
