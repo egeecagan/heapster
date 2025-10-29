@@ -6,15 +6,13 @@
 #include "heapster.h"
 #include "internal_f.h"
 
+// inside the source code user can access the arenas with arena_get_list() method
 static arena_t *arena_list_head = NULL; 
-/*
-program icinde olusturulan tum arenalar getter methodu ile (arena_get_list())
-ulasilir linked list yapisidir return_value->next ile devam edilir sadece lock
-kullanimi var unutma
-*/
+
 
 pthread_mutex_t arena_list_lock = PTHREAD_MUTEX_INITIALIZER;
 
+// if user wanted size is less then this use sbrk to increase end of heap.
 static size_t mmap_threshold = 128 * 1024; 
 /*
 arena create'nin parametresi size bu sizedan 
@@ -219,8 +217,6 @@ void arena_clear(arena_t *arena) {
     pthread_mutex_unlock(&arena->lock);
 }
 
-
-
 void arena_destroy(arena_t *arena) {
     if (!arena) return;
 
@@ -262,7 +258,6 @@ void arena_destroy(arena_t *arena) {
     }
 }
 
-
 // parametre olan size block icin olan payload size'i
 block_header_t *arena_find_free_block(arena_t *arena, size_t block_payload_size) {
     if (!arena || block_payload_size == 0) {
@@ -284,24 +279,44 @@ void arena_dump(arena_t *arena) {
         return;
     }
 
-    pthread_mutex_lock(&arena->lock);
+    // Kilit yönetimini ekleyin
+    pthread_mutex_lock(&arena->lock); 
 
     printf("===== arena %llu =====\n", (unsigned long long)arena->id);
-    printf("start addr     : %p\n", arena->start);
-    printf("end addr       : %p\n", arena->end);
-    printf("total size     : %zu bytes\n", arena->size);
-    printf("free list head : %p\n", (void *)arena->free_list_head);
-    printf("next fit cursor: %p\n", (void *)arena->next_fit_cursor);
+    printf("start addr        : %p\n", arena->start);
+    printf("end addr          : %p\n", arena->end);
+    printf("total arena size  : %zu bytes\n", arena->size);
+    printf("free list head    : %p\n", (void *)arena->free_list_head);
+    printf("next fit cursor   : %p\n", (void *)arena->next_fit_cursor);
+    
+    // *********************************************************
+    // İSTATİSTİK RAPORLAMA VE FRAGMENTASYON HESAPLAMASI (EKLENDİ)
+    // *********************************************************
+    double fragmentation_ratio = 0.0;
+    if (arena->stats.free_bytes > 0) {
+        fragmentation_ratio = 1.0 - ((double)arena->stats.largest_free_block / arena->stats.free_bytes);
+    }
 
-    // printf("--- stats ---\n");
-    // printf("used bytes     : %zu\n", arena->stats.used_bytes);
-    // printf("free bytes     : %zu\n", arena->stats.free_bytes);
-    // printf("alloc calls    : %llu\n", (unsigned long long)arena->stats.alloc_calls);
-    // printf("free calls     : %llu\n", (unsigned long long)arena->stats.free_calls);
-
+    printf("\n--- stats ---\n");
+    printf("total bytes    : %zu\n", arena->stats.total_bytes);
+    printf("used bytes     : %zu\n", arena->stats.used_bytes);
+    printf("free bytes     : %zu\n", arena->stats.free_bytes);
+    printf("allocated blocks: %zu\n", arena->stats.allocated_block_count);
+    printf("free blocks    : %zu\n", arena->stats.free_block_count);
+    printf("largest free blk: %zu\n", arena->stats.largest_free_block);
+    printf("wasted (internal) : %zu\n", arena->stats.wasted_bytes);
+    printf("fragmentation ratio: %.4f\n", fragmentation_ratio);
+    
+    printf("malloc calls   : %llu\n", (unsigned long long)arena->stats.malloc_calls);
+    printf("free calls     : %llu\n", (unsigned long long)arena->stats.free_calls);
+    printf("realloc calls  : %llu\n", (unsigned long long)arena->stats.realloc_calls);
+    printf("calloc calls   : %llu\n", (unsigned long long)arena->stats.calloc_calls);
+    
+    // Blok serbest listesini dök
     block_dump_free_list(arena);
 
-    pthread_mutex_unlock(&arena->lock);
+    // Kilit yönetimini ekleyin
+    pthread_mutex_unlock(&arena->lock); 
 
     printf("====================\n\n");
 }
@@ -320,4 +335,26 @@ int last_cleanup(void) {
 
     arena_list_head = NULL; // tüm arenalar yok edildi
     return 0;
+}
+
+void heapster_status(void) {
+
+    printf("arena stats explanation: \n");
+
+    pthread_mutex_lock(&arena_list_lock); 
+
+    if (!arena_list_head) {
+        fprintf(stderr, "[fatal error] arena list head is NULL\n"); 
+        pthread_mutex_unlock(&arena_list_lock); 
+        return;
+    } 
+
+    arena_t *head = arena_list_head;
+    while (head) {
+        arena_dump(head);
+        // arena_stats_print(head); // BU SATIRI KALDIRIN
+        head = head->next;
+    }
+
+    pthread_mutex_unlock(&arena_list_lock); 
 }

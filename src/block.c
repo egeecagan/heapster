@@ -4,6 +4,7 @@
 
 #include <stdbool.h>
 
+// freeden kast edilen user malloc calloc realloc ile almamis halde duran block
 static inline bool block_is_in_free_list(arena_t *arena, block_header_t *b) {
     if (!arena || !b || b->free != 1) {
         return false;
@@ -21,7 +22,7 @@ static inline bool block_is_in_free_list(arena_t *arena, block_header_t *b) {
 
 /*
 bu fonksiyonu hangi arena icin cagirdiysak cagirma isleminden sonra ilk yapilmasi gereken sey
-block->arena_id yi set etmek olmalidir
+block->arena_id yi set etmek olmalidir. blockun bulundugu arenanin id'si
 
 parametre olan adres alligned olabilir olmayadabilir ona gore onlem al tum program boyunca
 anladigim kadariyla header icin alignment sart degil ama payload allign olmak zorunda
@@ -39,22 +40,27 @@ block_header_t *block_init(void *addr, size_t total_block_size) {
                          
     block_header_t *block = (block_header_t *)addr;
 
-    block->size = total_block_size - BLOCK_HEADER_SIZE;  // sadece payload boyutu
+    // eldeki block icin olan payload boyutu. a block is -> | | header | payload | |
+    block->size = total_block_size - BLOCK_HEADER_SIZE;
+
     block->requested_size = 0;
     block->free = 1;
 
+    // siradaki free ve onceki free block icin pointerlar
     block->next = NULL;
     block->prev = NULL;
 
+    // free ya da not free farketmeksizin pointerlar arena ici blocklar icin
     block->phys_prev = NULL;
     block->phys_next = NULL;
+
     block->magic = CTRL_CHR;
     block->arena_id = -1;
 
     return block;
 }
 
-/* insert the block into the free list of the given arena in an address ordered manner */
+// insert the block into the free list of the given arena in an address ordered manner
 void block_add_to_free_list(arena_t *arena, block_header_t *block) {
     
     if (!arena || !block) {
@@ -123,10 +129,7 @@ void block_remove_from_free_list(arena_t *arena, block_header_t *block) {
     block->prev = NULL;
 }
 
-/* 
-split: allocate leading part, keep trailing remainder free and on the free list 
-size parametresi allocate edilen on parcanin payload miktari
-*/
+
 /* split: allocate leading part, keep trailing remainder free and on the free list 
 size parametresi allocate edilen on parcanin payload miktari
 */
@@ -182,7 +185,6 @@ block_header_t *block_split(arena_t *arena, block_header_t *block, size_t size) 
     // Yeni bir serbest blok oluşturulduğu için sayım 1 artar.
     arena->stats.free_block_count++; 
     // *********************************************************
-
     return block; // not: caller genelde allocate edilen 'block' ile ilgilenir
 }
 
@@ -242,10 +244,6 @@ block_header_t *block_coalesce(arena_t *arena, block_header_t *block) {
     }
 
     block_add_to_free_list(arena, block);
-    
-    // ** largest_free_block güncellenmesi burada yapılmaz **
-    // Bu, genellikle free/malloc fonksiyonlarında (heapster.c) yapılır,
-    // çünkü coalesce çağrıldığında o anki en büyük bloğun değişip değişmediğini bilmek önemlidir.
 
     return block; 
 }
@@ -295,11 +293,11 @@ int block_validate(block_header_t *block) {
 /* print free list */
 void block_dump_free_list(arena_t *arena) {
     if (!arena || !arena->free_list_head) {
-        printf("[heapster] free list empty\n");
+        printf("[heapster] arena id %llu's free list is empty\n", arena->id);
         return;
     }
 
-    printf("[heapster] Free list for arena %llu:\n", (unsigned long long) arena->id);
+    printf("[heapster] free list for arena %llu:\n", (unsigned long long) arena->id);
 
     block_header_t *curr = arena->free_list_head;
     int index = 0;

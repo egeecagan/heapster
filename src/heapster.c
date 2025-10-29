@@ -55,6 +55,7 @@ int heapster_finalize(void) {
 }
 
 // requested size bu parametre iste kullanicinin block payloadinda bu kadar yer olmasu lazim minimum
+// heapster.c
 void *heapster_malloc(size_t size) {
     if (size == 0) {
         return NULL;
@@ -94,12 +95,13 @@ void *heapster_malloc(size_t size) {
 
         found_arena = new_arena;
         
-        // Yeni arenada bloğu tekrar bul (mmap/sbrk'den gelen tek serbest blok)
+        // Yeni arenada bloğu tekrar bul
         block = arena_find_free_block(new_arena, aligned_payload_size);
     }
     
     // Hala blok yoksa (hata durumu)
     if (!block) {
+        fprintf(stderr, "[fatal error] there has to be at least one block here.\n");
         return NULL;
     }
 
@@ -111,12 +113,12 @@ void *heapster_malloc(size_t size) {
     void *payload_ptr = NULL;
     block_header_t *allocated_block = NULL;
 
-    // ** İSTATİSTİK: ÇAĞRI SAYISI **
+    size_t old_block_size = block->size; 
+    size_t old_largest_free = arena->stats.largest_free_block;
+    
     arena->stats.malloc_calls++;
 
-    // 3. Bölme (Split) Kontrolü
-    if (block->size >= aligned_payload_size + BLOCK_MIN_SIZE) {
-        
+    if (block->size >= aligned_payload_size + BLOCK_MIN_SIZE) {  // block_min_size split ten sonraki block icin yer varmi
         // Split işlemi deneniyor
         block_header_t *splitted_first_part = block_split(arena, block, aligned_payload_size);
         
@@ -138,13 +140,17 @@ void *heapster_malloc(size_t size) {
             arena->stats.allocated_block_count++;
             // free_block_count, block_split içinde zaten artırıldı.
             
-        } else {
-            // Split başarısız (bu koşulda nadir olmalı, ama ihtimal dahilinde)
-            // Bu durumda payload_ptr NULL kalır, aşağıdaki unlock'tan sonra NULL döner.
-        }
+            // Largest Free Block Güncellemesi (Split yeni bir serbest blok oluşturduysa)
+            // block_split, kalan serbest bloğu free list'e ekledi ve eğer boyutu büyükse
+            // largest_free_block'u güncellemesi GEREKİR. 
+            // Eğer block_split bu güncellemeyi yapmıyorsa, burada manuel kontrol eklenebilir.
+            // Şimdilik, block_split'in sadece free list'i yönettiğini varsayalım.
+            // Yeniden hesaplama, 5. adımda zaten yapılıyor.
+
+        } 
 
     } else {
-        // 4. Tam Kullanım Durumu (Split Yok)
+        // 4. Tam Kullanım Durumu (Split Yok) - KRİTİK DÜZELTME BURADA
         
         // Bloğu serbest listeden çıkar (Tamamen kullanıldığı için)
         block_remove_from_free_list(arena, block);
@@ -154,20 +160,36 @@ void *heapster_malloc(size_t size) {
         block->requested_size = size;    
         block->magic = CTRL_CHR; 
         payload_ptr = block_to_payload(block);
-        allocated_block = block; // Tahsis edilen blok bu.
+        allocated_block = block; 
         
-        // ** İSTATİSTİK GÜNCELLEME (TAM KULLANIM) **
-        size_t allocated_size = allocated_block->size;
-
-        arena->stats.used_bytes += allocated_size; 
-        arena->stats.free_bytes -= allocated_size; 
+        // ** İSTATİSTİK GÜNCELLEME (TAM KULLANIM) - DÜZELTİLDİ **
         
-        arena->stats.wasted_bytes += (allocated_size - size);
+        // used_bytes: Gerçekten tahsis edilen payload'ın tamamını ekle (Örn: 288)
+        arena->stats.used_bytes += old_block_size; 
+        
+        // free_bytes: Serbest listeden çıkan payload'ın tamamını çıkar (Örn: 288)
+        arena->stats.free_bytes -= old_block_size; 
+        
+        // wasted_bytes: İstenen (40) ile tahsis edilen (288) arasındaki farkı ekle (Örn: 248)
+        arena->stats.wasted_bytes += (old_block_size - size);
         
         arena->stats.allocated_block_count++;
         arena->stats.free_block_count--; // Serbest blok tamamen kullanıldığı için azalır.
     }
     
+    // 5. Largest Free Block'u Yeniden Hesapla (Split/Tam kullanım sonrası)
+    // Eğer kullanılan blok (old_block_size) önceki en büyük bloksa, yeni en büyük bloğu bul.
+    if (old_largest_free == old_block_size) {
+        arena->stats.largest_free_block = 0;
+        block_header_t *current = arena->free_list_head;
+        while (current) {
+            if (current->size > arena->stats.largest_free_block) {
+                arena->stats.largest_free_block = current->size;
+            }
+            current = current->next;
+        }
+    }
+
     pthread_mutex_unlock(&arena->lock);
     
     return payload_ptr;
@@ -411,5 +433,4 @@ void heapster_free(void *ptr) {
 
     fprintf(stderr, "[heapster] free: block %p not found in any arena\n", ptr);
 }
-
 
